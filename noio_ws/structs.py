@@ -1,9 +1,4 @@
-from nnws import Roles
-
-CONTROL_FRAMES = ['close', 'ping', 'pong']
-TYPE_FRAMES = ['text', 'binary']
-CONT_FRAME = ['continuation']
-BASE_ALL_FRAMES = CONTROL_FRAMES + TYPE_FRAMES + CONT_FRAME
+from .constants import *
 
 
 class Frame:
@@ -17,7 +12,7 @@ class Frame:
         self.mask = None
         self.expected_len = 0
         self.l_bound = 0
-        self.payload_starts = 0
+        self.pl_strt = 2
 
         self.payload = bytearray()
 
@@ -60,7 +55,7 @@ class Frame:
                 self.masked = True
 
         # get length
-        self.expected_len = int(bin(b2)[4:], 2)
+        self.expected_len = int(bin(b2)[2:].zfill(8)[4:], 2)
         if self.expected_len <= 125:
             pass
 
@@ -81,3 +76,9 @@ class Frame:
         self.payload.extend(frame.payload)
         self.fin = frame.fin
 
+
+class Message:
+    def __init__(self, message, reserved, control):
+        self.message = message
+        self.reserved = reserved
+        self.control = control
