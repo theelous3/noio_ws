@@ -55,7 +55,7 @@ class Frame:
                 self.masked = True
 
         # get length
-        self.expected_len = int(bin(b2)[2:].zfill(8)[4:], 2)
+        self.expected_len = int(bin(b2)[2:].zfill(8)[1:], 2)
         if self.expected_len <= 125:
             pass
 

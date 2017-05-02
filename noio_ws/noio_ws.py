@@ -190,8 +190,10 @@ class Recvr:
         if self.f.opcode in TYPE_FRAMES:
             if not self.data_f:
                 if self.f.fin:
+                    if self.f.opcode == 'text':
+                        self.f.payload = str(self.f.payload, 'utf-8')
                     returnable = Message(
-                        bytes(self.f.payload), self.f.resrvd, None)
+                        self.f.payload, self.f.resrvd, None)
                 else:
                     self.data_f = self.f
                     returnable = Directive.NEED_DATA
@@ -204,7 +206,7 @@ class Recvr:
                 self.data_f.incorporate(self.f)
                 if self.data_f.fin:
                     returnable = Message(
-                        bytes(self.data_f.payload), self.data_f.resrvd, None)
+                        self.data_f.payload, self.data_f.resrvd, None)
                     self.data_f = None
 
         if self.f.opcode in CONTROL_FRAMES:
