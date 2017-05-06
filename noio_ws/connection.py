@@ -2,24 +2,24 @@ from urllib.parse import urlparse, urlunparse
 from random import randint, getrandbits
 from base64 import b64encode, b64decode
 
-import h11
-
 from .errors import NnwsProtocolError
-from .structs import Frame, Message
+from .structs import *
 from .constants import *
+from .utils import mask_unmask
+
+__all__ = ['Connection']
 
 
 class Connection:
-    def __init__(self, role, subprotocols=None, extensions=None, host=None):
-        self.host = host
+    def __init__(self,
+                 role,
+                 opcode_type_mod=None,
+                 opcode_control_mod=None,
+                 rsrv_mod=None):
         if role == 'CLIENT':
             self.role = Roles.CLIENT
         elif role == 'SERVER':
             self.role = Roles.SERVER
-            try:
-                assert self.host
-            except AssertionError:
-                raise NnwsProtocolError('Must supply a host with Role.SERVER')
         else:
             raise AttributeError(role, 'is not a valid role.')
 
@@ -27,25 +27,56 @@ class Connection:
         self.close_init_client = False
         self.close_init_server = False
 
-        self.subprotocols = None
-        self.extensions = None
+        self.opcodes = {'continuation': 0,
+                        'text': 1,
+                        'binary': 2,
+                        'close': 8,
+                        'ping': 9,
+                        'pong': 10}
+        if opcode_type_mod:
+            if all(opcode != given_opcode and given_opcode < 15
+                   for _, opcode in self.opcodes.items()
+                   for _, given_opcode in opcode_type_mod):
+                self.opcodes.update(opcode_type_mod)
+                global TYPE_FRAMES
+                TYPE_FRAMES.extend([opphrase for opphrase, _ in
+                                    opcode_type_mod.items()])
+            else:
+                raise ValueError('Cannot overwrite default opcode.')
+        if opcode_control_mod:
+            if all(opcode != given_opcode and given_opcode < 15
+                   for _, opcode in self.opcodes.items()
+                   for _, given_opcode in opcode_control_mod):
+                self.opcodes.update(opcode_control_mod)
+                global CONTROL_FRAMES
+                CONTROL_FRAMES.extend([opphrase for opphrase, _
+                                       in opcode_control_mod.items()])
+            else:
+                raise ValueError('Cannot overwrite default opcode.')
 
-        self.recvr = Recvr(self.role)
+        self.recvr = Recvr(self.role, self.opcodes)
         self.event = None
 
-    def recv(self, stuff):
+    def recv(self, bytechunk):
+        self.event = self.recvr(bytechunk)
         if self.state is CStates.OPEN:
-            self.event = self.recvr(stuff)
             if isinstance(self.event, Message):
-                if self.event.control == 'close':
-                    if self.close_init:
+                if self.event.type == 'close':
+                    if self.close_init_client:
                         self.state = CStates.CLOSED
                     else:
                         self.close_init_server = True
                         self.state = CStates.CLOSING
 
         if self.state is CStates.CLOSING:
-            self.event = Directive.SEND_CLOSE
+            if self.close_init_client:
+                if isinstance(self.event, Message):
+                    if self.event.type != 'close':
+                        self.event = Directive.NEED_DATA
+                    else:
+                        self.event = Information.CONNECTION_CLOSED
+            elif self.close_init_server:
+                self.event = Directive.SEND_CLOSE
 
         if self.state is CStates.CLOSED:
             raise NnwsProtocolError('Trying to recv data on closed connection')
@@ -53,15 +84,15 @@ class Connection:
     def send(self, data):
         if self.state is CStates.OPEN:
             if isinstance(data, Data):
-                byteball, close = data(self.role)
+                byteball, close = data(self.role, self.opcodes)
                 if close:
-                    if self.close_init:
+                    if self.close_init_server:
                         self.state = CStates.CLOSED
                     else:
                         self.close_init_client = True
                         self.state = CStates.CLOSING
         if self.state is CStates.CLOSING:
-            byteball, close = data()
+            byteball, close = data(self.role, self.opcodes)
             if not close:
                 raise NnwsProtocolError('Cannot send non-close frame in '
                                         'closing state')
@@ -94,7 +125,7 @@ class Connection:
 
 class Recvr:
 
-    def __init__(self, role):
+    def __init__(self, role, opcodes):
         self.data_f = None
         self.f = None
 
@@ -102,6 +133,7 @@ class Recvr:
 
         self.state = RecvrState.AWAIT_FRAME_START
         self.role = role
+        self.opcodes = opcodes
 
     def __call__(self, bytechunk):
         if self.state is RecvrState.AWAIT_FRAME_START:
@@ -134,7 +166,7 @@ class Recvr:
     def await_start(self):
         if len(self.buffer) < 2:
             return Directive.NEED_DATA
-        self.f = Frame(self.buffer)
+        self.f = Frame(self.buffer, self.opcodes)
         self.f.proc(self.role)
         if self.f.l_bound:
             self.state = RecvrState.NEED_LEN
@@ -193,7 +225,7 @@ class Recvr:
                     if self.f.opcode == 'text':
                         self.f.payload = str(self.f.payload, 'utf-8')
                     returnable = Message(
-                        self.f.payload, self.f.resrvd, None)
+                        self.f.payload, self.f.opcode, self.f.resrvd)
                 else:
                     self.data_f = self.f
                     returnable = Directive.NEED_DATA
@@ -201,18 +233,19 @@ class Recvr:
                 self.f = None
                 raise NnwsProtocolError('Attempted to interleave '
                                         'non-control frames.')
-        if self.f.opcode == 'continuation':
+        elif self.f.opcode == 'continuation':
             if self.data_f:
                 self.data_f.incorporate(self.f)
                 if self.data_f.fin:
-                    returnable = Message(
-                        self.data_f.payload, self.data_f.resrvd, None)
+                    returnable = Message(self.data_f.payload,
+                                         self.data_f.opcode,
+                                         self.data_f.resrvd)
                     self.data_f = None
 
-        if self.f.opcode in CONTROL_FRAMES:
+        elif self.f.opcode in CONTROL_FRAMES:
             if self.f.fin:
                 returnable = Message(
-                    bytes(self.f.payload), self.f.resrvd, self.f.opcode)
+                    bytes(self.f.payload), self.f.opcode, self.f.resrvd)
             else:
                 self.f = None
                 raise NnwsProtocolError('Fragmented control frame.')
@@ -221,105 +254,3 @@ class Recvr:
         self.f = None
 
         return returnable
-
-
-class Data:
-
-    def __init__(self, data, type, fin):
-        self.data = data
-        if type in BASE_ALL_FRAMES:
-            self.type = type
-        else:
-            raise ValueError('Unrecognised value for type:', type)
-
-        if fin is False:
-            if self.type not in CONTROL_FRAMES:
-                self.fin = fin
-            else:
-                raise NnwsProtocolError('Trying to fragment'
-                                        'control frame:', self.type)
-        elif fin is True:
-            self.fin = fin
-        else:
-            raise ValueError('Invalid value for fin:', fin)
-
-    def __call__(self, role):
-        self.data = bytesify(self.data)
-
-        bytes_to_go = bytearray()
-        close = False
-
-        byte_0 = 0
-        if self.fin:
-            byte_0 = byte_0 | 1 << 7
-
-        if self.type == 'continuation':
-            opcode = 0
-        elif self.type == 'text':
-            opcode = 1
-        elif self.type == 'binary':
-            opcode = 2
-        elif self.type == 'close':
-            opcode = 8
-            close = True
-        elif self.type == 'ping':
-            opcode = 9
-        elif self.type == 'pong':
-            opcode = 10
-
-        byte_0 = byte_0 | opcode
-        bytes_to_go.append(byte_0)
-
-        byte_1 = 0
-        mask = None
-
-        if role is Roles.CLIENT:
-            byte_1 = byte_1 | 1 << 7
-            mask = getrandbits(32).to_bytes(4, 'big')
-            self.data = mask_unmask(self.data, mask)
-
-        data_len = len(self.data)
-        if data_len <= 125:
-            len_flag = data_len
-        elif data_len <= 65535:
-            len_flag = 126
-        elif data_len <= 9223372036854775807:
-            len_flag = 127
-        else:
-            raise NnwsProtocolError('Data > 8.388 million TB, you lunatic.')
-        byte_1 = byte_1 | len_flag
-        bytes_to_go.append(byte_1)
-
-        if len_flag in [126, 127] and self.type in CONTROL_FRAMES:
-            raise NnwsProtocolError('Payload too big for'
-                                    'control frame.'
-                                    '{}/125:'.format(data_len))
-
-        if len_flag == 126:
-            bytes_to_go.append(data_len.to_bytes(2, 'big'))
-        elif len_flag == 127:
-            bytes_to_go.append(data_len.to_bytes(8, 'big'))
-
-        if mask is not None:
-            bytes_to_go.extend(mask)
-
-        bytes_to_go.extend(self.data)
-        return bytes(bytes_to_go), close
-
-
-def mask_unmask(data, mask):
-    for i, x in enumerate(data):
-        data[i] = x ^ mask[i % 4]
-    return data
-
-
-def bytesify(data):
-    if isinstance(data, str):
-        data = bytearray(data, 'utf-8')
-    elif isinstance(data, bytes):
-        data = bytearray(data)
-    elif isinstance(data, bytearray):
-        pass
-    else:
-        raise NnwsProtocolError('Trying to send non-binary or non-utf8 data.')
-    return data

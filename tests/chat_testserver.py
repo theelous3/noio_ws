@@ -3,7 +3,7 @@ import curio
 from curio import socket
 
 
-class WSServerHandler:
+class WSServerClientHandler:
     def __init__(self, server, sock, addr):
         self.server = server
         self.sock = sock
@@ -11,12 +11,21 @@ class WSServerHandler:
         self.wcon = ws.Connection(role='SERVER', host='lol')
 
     async def main(self):
-        await self.send(('Chat', 'Server'), f'Welcome {self.addr}')
+        await self.server_send(f'Welcome {self.addr}', 'text')
         while True:
             event = await self.get_event()
+            print(event)
             if isinstance(event, ws.Message):
-                for client, handler in self.server.connections.items():
-                    await handler.send(self.addr, event.message)
+                if event.type == 'text':
+                    for client, client_handler in self.server.connections.items():
+                        await client_handler.send(self.addr, event.message, 'text')
+            elif event == ws.Directive.SEND_CLOSE:
+                await self.server_send('', 'close')
+                del self.server.connections[self.addr]
+                for client, client_handler in self.server.connections.items():
+                    await client_handler.server_send(f'{self.addr} disconnected.', 'text')
+                break
+            await curio.sleep(0)
 
     async def get_event(self):
         while True:
@@ -26,10 +35,17 @@ class WSServerHandler:
                 continue
             return event
 
-    async def send(self, sender, message):
+    async def server_send(self, message, type):
         await self.sock.sendall(
             self.wcon.send(
-                ws.Data('|'.join(map(str, sender)) + ': ' + message, 'text', True)))
+                ws.Data('*'*5 + 'Chat|Server:' +
+                        message, type, True)))
+
+    async def send(self, sender, message, type):
+        await self.sock.sendall(
+            self.wcon.send(
+                ws.Data('|'.join(map(str, sender)) + ': ' +
+                        message, type, True)))
 
 
 class WsServer:
@@ -45,9 +61,10 @@ class WsServer:
         while True:
             connection, client = await sock.accept()
             print(client, 'connected')
-            client_handler = WSServerHandler(self, connection, client)
+            client_handler = WSServerClientHandler(self, connection, client)
             self.connections[client] = client_handler
             await curio.spawn(client_handler.main())
+            print('awaiting new client')
 
 if __name__ == '__main__':
     server = WsServer()

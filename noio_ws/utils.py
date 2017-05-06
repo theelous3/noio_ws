@@ -1,9 +1,14 @@
+import h11
+import noio_ws as ws
 
-def initial_nonce_constructor():
+__all__ = ['Handshake']
+
+
+def nonce_creator():
     return b64encode(bytearray([randint(0, 255) for _ in range(1, 17)]))
 
 
-def secondary_nonce_constructor(nonce):
+def secondary_nonce_creator(nonce):
     concatd_nonce = str(nonce, 'utf-8') + MAGIC_STR
     concatd_nonce = hashlib.sha1(concatd_nonce.encode('utf-8')).digest()
     concatd_nonce = b64encode(concatd_nonce)
@@ -22,11 +27,23 @@ def compare_headers(req_header_item, resp_header_item):
 
 
 class Handshake:
-    def __init__(self, wcon):
-        self.nonce = None
-        self.wcon = wcon
+    def __init__(self, role, subprotocols=None, extensions=None):
+        if role == 'CLIENT':
+            self.role = Roles.CLIENT
+        elif role == 'SERVER':
+            self.role = Roles.SERVER
+        else:
+            raise AttributeError(role, 'is not a valid role.')
+        if self.role is ws.Roles.CLIENT:
+            self.hcon = h11.Connection(our_role=CLIENT)
+        elif self.role is ws.Roles.SERVER:
+            self.hcon = h11.Connection(our_role=SERVER)
 
-    def client_handshake(uri, **kwargs):
+        self.nonce = None
+        self.subprotocols = subprotocols
+        self.extensions = extensions
+
+    def client_handshake(self, uri, **kwargs):
         scheme, netloc, path, _, _, _ = urlparse(uri)
         try:
             netloc, port = netloc.split(':', 1)
@@ -37,24 +54,27 @@ class Handshake:
                 port = '80'
             else:
                 raise ValueError('Supplied bad location schema')
+
         request_uri = urlunparse((scheme, netloc, path, '', '', ''))
-        self.nonce = initial_nonce_constructor()
+        self.nonce = nonce_creator()
         headers = {'host': ':'.join((netloc, port)),
                    'upgrade': 'websocket',
                    'connection': 'upgrade',
                    'sec-websocket-key': self.nonce,
                    'sec-websocket-version': '13'}
-        if self.wcon.protocols:
-            headers.update({'sec-websocket-protocol': self.wcon.protocols})
-        if self.wcon.extensions:
-            headers.update({'sec-websocket-extensions': self.wcon.extensions})
+        if self.subprotocols is not None:
+            headers.update({'sec-websocket-protocol': self.subprotocols})
+        if self.extensions is not None:
+            headers.update({'sec-websocket-extensions': self.extensions})
         if kwargs:
             headers.update(kwargs)
+
         handshake = h11.Request(
             method='GET', target=request_uri, headers=headers.items())
+
         return handshake
 
-    def verify_response(response):
+    def verify_response(self, response):
         if not response.status_code == 101:
             return False, response, None
         try:
@@ -67,7 +87,7 @@ class Handshake:
             raise NnwsProtocolError('Invalid response on connection header')
         try:
             accept_key = response.headers[b'sec-websocket-accept']
-            magic_nonce = secondary_nonce_constructor(self.nonce)
+            magic_nonce = secondary_nonce_creator(self.nonce)
             assert accept_key == magic_nonce
         except (KeyError, AssertionError):
             raise NnwsProtocolError('Invalid response on sec-websocket'
@@ -78,7 +98,7 @@ class Handshake:
             resp_extensions = response.headers[b'sec-websocket-extensions']
 
             compare_extensions = compare_headers(
-                self.wcon.req_extensions, str(resp_extensions, 'utf-8'))
+                self.extensions, str(resp_extensions, 'utf-8'))
             assert compare_extensions
         except KeyError:
             pass
@@ -90,15 +110,15 @@ class Handshake:
             resp_protocols = response.headers[b'sec-websocket-protocol']
 
             compare_protocols = compare_headers(
-                self.wcon.req_subprotocols, str(resp_protocols, 'utf-8'))
+                self.subprotocols, str(resp_protocols, 'utf-8'))
             assert compare_protocols
         except KeyError:
             pass
         except AssertionError:
             raise NnwsProtocolError('Invalid protocol in response')
-        return True, compare_protocols, compare_extensions
+        return compare_protocols, compare_extensions
 
-    def verify_request(request):
+    def verify_request(self, request):
         try:
             assert request.headers[b'upgrade'] == b'websocket'
         except (KeyError, AssertionError):
@@ -117,7 +137,7 @@ class Handshake:
         try:
             resp_extensions = request.headers[b'sec-websocket-extensions']
             compare_extensions = compare_headers(
-                wcon.extensions, str(resp_extensions, 'utf-8'))
+                self.extensions, str(resp_extensions, 'utf-8'))
             assert compare_extensions
         except KeyError:
             pass
@@ -128,7 +148,7 @@ class Handshake:
         try:
             resp_protocols = response.headers[b'sec-websocket-protocol']
             compare_protocols = compare_headers(
-                wcon.subprotocols, str(resp_protocols, 'utf-8'))
+                self.subprotocols, str(resp_protocols, 'utf-8'))
             assert compare_protocols
         except KeyError:
             pass
@@ -139,21 +159,25 @@ class Handshake:
             assert request.headers[b'sec-websocket-version'] == b'13'
         except (KeyError, AssertionError):
             raise NnwsProtocolError('Bad version from client')
-        return request
+        return compare_extensions, compare_protocols
 
-    def server_handshake(**kwargs):
+    def server_handshake(self, **kwargs):
         headers = {'upgrade': 'websocket',
                    'connection': 'upgrade',
-                   'sec-websocket-accept': secondary_nonce_constructor(self.nonce),
+                   'sec-websocket-accept': secondary_nonce_creator(self.nonce),
                    'sec-websocket-version': '13'}
-        if self.wcon.protocols:
-            headers.update({'sec-websocket-protocol': self.wcon.protocols})
-        if self.wcon.extensions:
-            headers.update({'sec-websocket-extensions': self.wcon.extensions})
+        if self.subprotocols:
+            headers.update({'sec-websocket-protocol': self.subprotocols})
+        if self.extensions:
+            headers.update({'sec-websocket-extensions': self.extensions})
         if kwargs:
             headers.update(kwargs)
-        byteball = HCONN.send(h11.InformationalResponse(
+        return h11.InformationalResponse(
             status_code=101, reason='Switching Protocols',
-            headers=headers.items()))
-        self.wcon.hcon.send(h11.EndOfMessage())
-        return byteball
+            headers=headers.items())
+
+
+def mask_unmask(data, mask):
+    for i, x in enumerate(data):
+        data[i] = x ^ mask[i % 4]
+    return data

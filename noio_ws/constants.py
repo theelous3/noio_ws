@@ -9,7 +9,8 @@ __all__ = ['MAGIC_STR',
            'CStates',
            'Roles',
            'RecvrState',
-           'Directive']
+           'Directive',
+           'Information']
 
 MAGIC_STR = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
@@ -45,3 +46,7 @@ class Directive(Enum):
     SEND_PING = auto()
     SEND_PONG = auto()
     SEND_CLOSE = auto()
+
+
+class Information(Enum):
+    CONNECTION_CLOSED = auto()

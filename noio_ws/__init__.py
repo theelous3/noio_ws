@@ -1,2 +1,3 @@
-from .noio_ws import Connection, Data, Message
-from .constants import Roles, Directive
+from .connection import Connection
+from .structs import Data, Message
+from .constants import Roles, Directive, Information
