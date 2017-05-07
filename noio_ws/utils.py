@@ -15,15 +15,13 @@ def secondary_nonce_creator(nonce):
     return concatd_nonce
 
 
-def compare_headers(req_header_item, resp_header_item):
-    req_header_items = str(req_header_item, 'utf-8').split(', ')
+def compare_headers(req_header_items, resp_header_item):
     resp_header_items = str(resp_header_item, 'utf-8').split(', ')
     matches = []
     for header in req_header_items:
         if header in resp_header_items:
             matches.append(header)
-    if matches:
-        return matches[0]
+    return matches
 
 
 class Handshake:
@@ -135,9 +133,9 @@ class Handshake:
 
         compare_extensions = None
         try:
-            resp_extensions = request.headers[b'sec-websocket-extensions']
+            req_extensions = request.headers[b'sec-websocket-extensions']
             compare_extensions = compare_headers(
-                self.extensions, str(resp_extensions, 'utf-8'))
+                self.extensions, str(req_extensions, 'utf-8'))
             assert compare_extensions
         except KeyError:
             pass
@@ -146,9 +144,9 @@ class Handshake:
 
         compare_protocols = None
         try:
-            resp_protocols = response.headers[b'sec-websocket-protocol']
+            req_protocols = response.headers[b'sec-websocket-protocol']
             compare_protocols = compare_headers(
-                self.subprotocols, str(resp_protocols, 'utf-8'))
+                self.subprotocols, str(req_protocols, 'utf-8'))
             assert compare_protocols
         except KeyError:
             pass

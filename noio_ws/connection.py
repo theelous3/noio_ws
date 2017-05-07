@@ -68,7 +68,7 @@ class Connection:
                         self.close_init_server = True
                         self.state = CStates.CLOSING
 
-        if self.state is CStates.CLOSING:
+        elif self.state is CStates.CLOSING:
             if self.close_init_client:
                 if isinstance(self.event, Message):
                     if self.event.type != 'close':
@@ -78,7 +78,7 @@ class Connection:
             elif self.close_init_server:
                 self.event = Directive.SEND_CLOSE
 
-        if self.state is CStates.CLOSED:
+        else:  # self.state is CStates.CLOSED:
             raise NnwsProtocolError('Trying to recv data on closed connection')
 
     def send(self, data):
@@ -91,12 +91,12 @@ class Connection:
                     else:
                         self.close_init_client = True
                         self.state = CStates.CLOSING
-        if self.state is CStates.CLOSING:
+        elif self.state is CStates.CLOSING:
             byteball, close = data(self.role, self.opcodes)
             if not close:
                 raise NnwsProtocolError('Cannot send non-close frame in '
                                         'closing state')
-        if self.state is CStates.CLOSED:
+        else:  # self.state is CStates.CLOSED:
             raise NnwsProtocolError('Trying to send data on closed connection')
 
         return byteball
@@ -109,7 +109,7 @@ class Connection:
             else:
                 returnable = Directive.NEED_DATA
             return returnable
-        if self.state is CStates.CLOSING:
+        elif self.state is CStates.CLOSING:
             if self.event is not None:
                 returnable = self.event
                 self.event = None
@@ -119,7 +119,7 @@ class Connection:
                 if self.close_init_server:
                     returnable = Directive.SEND_CLOSE
             return returnable
-        if self.state is CStates.CLOSED:
+        else:  # self.state is CStates.CLOSED:
             return None
 
 
@@ -145,22 +145,22 @@ class Recvr:
                 return result
             self.buffer = bytearray()
 
-        if self.state is RecvrState.NEED_LEN:
+        elif self.state is RecvrState.NEED_LEN:
             result = self.need_len(bytechunk)
             if result is not None:
                 return result
 
-        if self.state is RecvrState.NEED_MASK:
+        elif self.state is RecvrState.NEED_MASK:
             result = self.need_mask(bytechunk)
             if result is not None:
                 return result
 
-        if self.state is RecvrState.NEED_BODY:
+        elif self.state is RecvrState.NEED_BODY:
             result = self.need_body(bytechunk)
             if result is not None:
                 return result
 
-        if self.state is RecvrState.MSG_RECVD:
+        else:  # self.state is RecvrState.MSG_RECVD:
             return self.msg_recvd()
 
     def await_start(self):

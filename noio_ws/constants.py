@@ -21,8 +21,6 @@ BASE_ALL_FRAMES = CONTROL_FRAMES + TYPE_FRAMES + CONT_FRAME
 
 
 class CStates(Enum):
-    CONNECTING = auto()
-    AWAIT_RESPONSE = auto()
     OPEN = auto()
     CLOSING = auto()
     CLOSED = auto()
@@ -50,3 +48,17 @@ class Directive(Enum):
 
 class Information(Enum):
     CONNECTION_CLOSED = auto()
+
+
+status_codes = {1000: 'Normal Closure',
+                1001: 'Going Away',
+                1002: 'Protocol Error',
+                1003: 'Unsupported Data',
+                1005: 'No Status Rcvd',
+                1006: 'Abnormal Closure',
+                1007: 'Invalid Frame Payload Data',
+                1008: 'Policy Violation',
+                1009: 'Message Too Big',
+                1010: 'Mandatory Ext.',
+                1011: 'Internal Server Error',
+                1015: 'TLS Handshake'}
