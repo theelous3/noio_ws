@@ -1,7 +1,3 @@
-from urllib.parse import urlparse, urlunparse
-from random import randint, getrandbits
-from base64 import b64encode, b64decode
-
 from .errors import NnwsProtocolError
 from .structs import *
 from .constants import *
@@ -21,7 +17,7 @@ class Connection:
         elif role == 'SERVER':
             self.role = Roles.SERVER
         else:
-            raise AttributeError(role, 'is not a valid role.')
+            raise TypeError(role, 'is not a valid role.')
 
         self.state = CStates.OPEN
         self.close_init_client = False
@@ -58,9 +54,11 @@ class Connection:
         self.event = None
 
     def recv(self, bytechunk):
-        self.event = self.recvr(bytechunk)
+        print('gonna recv')
+        event = self.recvr(bytechunk)
         if self.state is CStates.OPEN:
-            if isinstance(self.event, Message):
+            if isinstance(event, Message):
+                self.event = event
                 if self.event.type == 'close':
                     if self.close_init_client:
                         self.state = CStates.CLOSED
@@ -70,8 +68,10 @@ class Connection:
 
         elif self.state is CStates.CLOSING:
             if self.close_init_client:
-                if isinstance(self.event, Message):
+                if isinstance(event, Message):
+                    self.event = event
                     if self.event.type != 'close':
+                        # pass directive or event?
                         self.event = Directive.NEED_DATA
                     else:
                         self.event = Information.CONNECTION_CLOSED
@@ -120,6 +120,7 @@ class Connection:
                     returnable = Directive.SEND_CLOSE
             return returnable
         else:  # self.state is CStates.CLOSED:
+            # this is probably inconsistent
             return None
 
 
@@ -145,25 +146,26 @@ class Recvr:
                 return result
             self.buffer = bytearray()
 
-        elif self.state is RecvrState.NEED_LEN:
+        if self.state is RecvrState.NEED_LEN:
             result = self.need_len(bytechunk)
             if result is not None:
                 return result
 
-        elif self.state is RecvrState.NEED_MASK:
+        if self.state is RecvrState.NEED_MASK:
             result = self.need_mask(bytechunk)
             if result is not None:
                 return result
 
-        elif self.state is RecvrState.NEED_BODY:
+        if self.state is RecvrState.NEED_BODY:
             result = self.need_body(bytechunk)
             if result is not None:
                 return result
 
-        else:  # self.state is RecvrState.MSG_RECVD:
+        if self.state is RecvrState.MSG_RECVD:
             return self.msg_recvd()
 
     def await_start(self):
+
         if len(self.buffer) < 2:
             return Directive.NEED_DATA
         self.f = Frame(self.buffer, self.opcodes)
@@ -176,6 +178,7 @@ class Recvr:
             self.state = RecvrState.NEED_BODY
 
     def need_len(self, bytechunk):
+        print('We find da len')
         if bytechunk is not None:
             self.f.buffer.extend(bytechunk)
         if len(self.f.buffer) < 2 + self.f.l_bound:
@@ -189,6 +192,7 @@ class Recvr:
             self.state = RecvrState.NEED_BODY
 
     def need_mask(self, bytechunk):
+        print('We gettin da mesk')
         if bytechunk is not None:
             self.f.buffer.extend(bytechunk)
         if self.f.l_bound:
@@ -204,6 +208,7 @@ class Recvr:
         self.state = RecvrState.NEED_BODY
 
     def need_body(self, bytechunk):
+        print('We need gettin da bodi')
         if bytechunk is not None:
             self.f.buffer.extend(bytechunk)
         if len(self.f.buffer[self.f.pl_strt:]) < self.f.expected_len:
@@ -218,6 +223,7 @@ class Recvr:
         self.state = RecvrState.MSG_RECVD
 
     def msg_recvd(self):
+        print('We has da mesug')
         self.buffer = self.f.buffer[self.f.raw_len:]
         if self.f.opcode in TYPE_FRAMES:
             if not self.data_f:

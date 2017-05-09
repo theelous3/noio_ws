@@ -1,5 +1,8 @@
+from random import getrandbits
+
 from .constants import *
 from .utils import mask_unmask
+
 
 __all__ = ['Frame', 'Message', 'Data']
 
@@ -81,7 +84,7 @@ class Frame:
 
 class Data:
 
-    def __init__(self, data, type, fin):
+    def __init__(self, data, type, fin=True, status_code=None):
         self.data = data
         self.type = type
 
@@ -96,6 +99,8 @@ class Data:
         else:
             raise ValueError('Invalid value for fin:', fin)
 
+        self.status_code = status_code
+
     def __call__(self, role, opcodes):
         self.data = bytesify(self.data)
 
@@ -103,6 +108,10 @@ class Data:
         close = False
         if self.type == 'close':
             close = True
+            if self.data:
+                assert (1000 <= self.status_code <= 1015 or
+                        4000 <= self.status_code <= 4999)
+                self.data = self.status_code.to_bytes(2, 'big') + self.data
 
         byte_0 = 0
         if self.fin:

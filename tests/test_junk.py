@@ -23,7 +23,7 @@ wcon_c = ws.Connection(role='CLIENT')
 a = wcon_c.send(ws.Data('HELLO serveadwaadwaddwwdr', 'text', True))
 
 
-wcon_s = ws.Connection(role='SERVER', host='localy')
+wcon_s = ws.Connection(role='SERVER')
 wcon_s.recv(a)
 b = wcon_s.next_event()
 print(b.message)

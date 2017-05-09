@@ -1,5 +1,12 @@
+from urllib.parse import urlparse, urlunparse
+from random import randint, getrandbits
+from base64 import b64encode, b64decode
+from hashlib import sha1
+
 import h11
 import noio_ws as ws
+
+from .constants import *
 
 __all__ = ['Handshake']
 
@@ -10,7 +17,7 @@ def nonce_creator():
 
 def secondary_nonce_creator(nonce):
     concatd_nonce = str(nonce, 'utf-8') + MAGIC_STR
-    concatd_nonce = hashlib.sha1(concatd_nonce.encode('utf-8')).digest()
+    concatd_nonce = sha1(concatd_nonce.encode('utf-8')).digest()
     concatd_nonce = b64encode(concatd_nonce)
     return concatd_nonce
 
@@ -33,9 +40,9 @@ class Handshake:
         else:
             raise AttributeError(role, 'is not a valid role.')
         if self.role is ws.Roles.CLIENT:
-            self.hcon = h11.Connection(our_role=CLIENT)
+            self.hcon = h11.Connection(our_role=h11.CLIENT)
         elif self.role is ws.Roles.SERVER:
-            self.hcon = h11.Connection(our_role=SERVER)
+            self.hcon = h11.Connection(our_role=h11.SERVER)
 
         self.nonce = None
         self.subprotocols = subprotocols
@@ -73,6 +80,7 @@ class Handshake:
         return handshake
 
     def verify_response(self, response):
+        response.headers = dict(response.headers)
         if not response.status_code == 101:
             return False, response, None
         try:
@@ -117,6 +125,7 @@ class Handshake:
         return compare_protocols, compare_extensions
 
     def verify_request(self, request):
+        request.headers = dict(request.headers)
         try:
             assert request.headers[b'upgrade'] == b'websocket'
         except (KeyError, AssertionError):
@@ -144,7 +153,7 @@ class Handshake:
 
         compare_protocols = None
         try:
-            req_protocols = response.headers[b'sec-websocket-protocol']
+            req_protocols = request.headers[b'sec-websocket-protocol']
             compare_protocols = compare_headers(
                 self.subprotocols, str(req_protocols, 'utf-8'))
             assert compare_protocols
