@@ -25,7 +25,7 @@ async def main(location):
     if isinstance(http_response, h11.Response):
         pass
         # In this case, the server responded with a status code
-        # other than 101 and auth requests or something might need
+        # other than 101 and an auth request or something might need
         # to take place in the realm of the http protocol.
 
     # If we get this far, it means verification didn't throw a
@@ -34,17 +34,20 @@ async def main(location):
 
     # Let's send a message to an echo server, wait for the response
     # and then close the connection.
-
+    await curio.sleep(5)
     await ws_send(sock, 'Hello server!', 'text')
 
     while True:
         response = await ws_next_event(sock)
         if isinstance(response, ws.Message):
-            print(f'Message recieved :D\n{response.message}')
-            await ws_send(sock, '', 'close')
-        elif response is ws.Information.CONNECTION_CLOSED:
-            print('WE EXITED CLEANLY...ISH')
-            raise SystemExit
+            if response.type == 'close':
+                await ws_send(sock, '', 'close')
+                print('WE EXITED CLEANLY...ISH')
+                await curio.sleep(1)
+                raise SystemExit
+            elif response.type == 'text':
+                print(f'Message recieved :D\n{response.message}')
+
 
 
 async def http_send(sock, *events):

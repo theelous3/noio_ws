@@ -14,7 +14,7 @@ class Message:
         self.reserved = reserved
 
 
-class Frame:
+class FrameParser:
     def __init__(self, bufferdata, opcodes):
         self.buffer = bufferdata
         self.opcodes = opcodes
@@ -84,7 +84,8 @@ class Frame:
 
 class Data:
 
-    def __init__(self, data, type, fin=True, status_code=None):
+    def __init__(self, data, type, fin=True, status_code=None,
+                 rsv_1=None, rsv_2=None, rsv_3=None):
         self.data = data
         self.type = type
 
@@ -101,6 +102,28 @@ class Data:
 
         self.status_code = status_code
 
+        if rsv_1 is not None:
+            if (rsv_1 == 0 or rsv_1 == 1):
+                self.rsv_1 = rsv_1
+            else:
+                raise ValueError('Invalid value for reserve:', rsv_1)
+        else:
+            self.rsv_1 = rsv_1
+        if rsv_2 is not None:
+            if (rsv_2 == 0 or rsv_2 == 1):
+                self.rsv_2 = rsv_2
+            else:
+                raise ValueError('Invalid value for reserve:', rsv_2)
+        else:
+            self.rsv_2 = rsv_2
+        if rsv_3 is not None:
+            if (rsv_3 == 0 or rsv_3 == 1):
+                self.rsv_3 = rsv_3
+            else:
+                raise ValueError('Invalid value for reserve:', rsv_3)
+        else:
+            self.rsv_3 = rsv_3
+
     def __call__(self, role, opcodes):
         self.data = bytesify(self.data)
 
@@ -116,6 +139,12 @@ class Data:
         byte_0 = 0
         if self.fin:
             byte_0 = byte_0 | 1 << 7
+        if self.rsv_1:
+            byte_0 = byte_0 | 1 << 6
+        if self.rsv_2:
+            byte_0 = byte_0 | 1 << 5
+        if self.rsv_3:
+            byte_0 = byte_0 | 1 << 4
 
         opcode = opcodes[self.type]
         byte_0 = byte_0 | opcode

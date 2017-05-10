@@ -20,11 +20,11 @@ vars(r)
 # ez test
 import noio_ws as ws
 
-wcon_c = ws.Connection(role='CLIENT')
-a = wcon_c.send(ws.Data('HELLO serveadwaadwaddwwdr', 'text', True))
+wcon_c = ws.Connection(role='CLIENT', opcode_type_mod={'wang-jangle': 3})
+a = wcon_c.send(ws.Data('HELLO serveadwaadwaddwwdr', 'wang-jangle', True))
 
 
-wcon_s = ws.Connection(role='SERVER')
+wcon_s = ws.Connection(role='SERVER', opcode_type_mod={'wang-jangle': 3})
 wcon_s.recv(a)
 b = wcon_s.next_event()
 print(b.message)

@@ -17,15 +17,18 @@ async def client_handler(connection, addr):
     request = ws_shaker.verify_request(request)
     await http_send(
         connection, ws_shaker.server_handshake())
-    print('getting ws message')
-    event = await ws_next_event(connection)
-    print('got ws message')
-    if isinstance(event, ws.Message):
-        print(f'{event.message} from {addr}')
-        await ws_send(connection, event.message, event.type)
-        await ws_send(connection, '', 'close')
-        print('WE EXITED CLEANLY...ISH')
-        raise SystemExit
+    while True:
+        event = await ws_next_event(connection)
+        print('got ws message', vars(event))
+        if isinstance(event, ws.Message):
+            if event.type != 'close':
+                print(f'{event.message} from {addr}')
+                await ws_send(connection, event.message, event.type)
+                await ws_send(connection, '', 'close')
+            else:
+                print(event.type)
+                print('WE EXITED CLEANLY...ISH')
+                raise SystemExit
 
 
 async def main(location):
@@ -62,10 +65,12 @@ async def ws_send(sock, message, type, fin=True, status_code=None):
 async def ws_next_event(sock):
     while True:
         event = wscon.next_event()
-        print(event)
         if event is ws.Information.NEED_DATA:
             stuff = await sock.recv(2048)
             print(stuff)
+            if not stuff:
+                print('no stuff')
+                raise SystemExit
             wscon.recv(stuff)
             continue
         return event
