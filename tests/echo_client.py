@@ -36,12 +36,13 @@ async def main(location):
     # and then close the connection.
 
     await ws_send(sock, 'Hello server!', 'text')
-    response = await ws_next_event(sock)
-    print(f'Message recieved :D\n{response.message}')
-    await ws_send(sock, '', 'close')
+
     while True:
         response = await ws_next_event(sock)
-        if response is ws.Information.CONNECTION_CLOSED:
+        if isinstance(response, ws.Message):
+            print(f'Message recieved :D\n{response.message}')
+            await ws_send(sock, '', 'close')
+        elif response is ws.Information.CONNECTION_CLOSED:
             print('WE EXITED CLEANLY...ISH')
             raise SystemExit
 
@@ -63,15 +64,13 @@ async def http_next_event(sock):
 
 
 async def ws_send(sock, message, type, fin=True, status_code=None):
-    stuff = wscon.send(ws.Data(message, type, fin, status_code))
-    print(stuff)
-    await sock.sendall(stuff)
+    await sock.sendall(wscon.send(ws.Data(message, type, fin, status_code)))
 
 
 async def ws_next_event(sock):
     while True:
         event = wscon.next_event()
-        if event is ws.Directive.NEED_DATA:
+        if event is ws.Information.NEED_DATA:
             stuff = await sock.recv(2048)
             print(stuff)
             wscon.recv(stuff)

@@ -70,13 +70,8 @@ class Connection:
             if self.close_init_client:
                 if isinstance(event, Message):
                     self.event = event
-                    if self.event.type != 'close':
-                        # pass directive or event?
-                        self.event = Directive.NEED_DATA
-                    else:
-                        self.event = Information.CONNECTION_CLOSED
             elif self.close_init_server:
-                self.event = Directive.SEND_CLOSE
+                self.event = Information.SEND_CLOSE
 
         else:  # self.state is CStates.CLOSED:
             raise NnwsProtocolError('Trying to recv data on closed connection')
@@ -107,21 +102,19 @@ class Connection:
                 returnable = self.event
                 self.event = None
             else:
-                returnable = Directive.NEED_DATA
-            return returnable
+                returnable = Information.NEED_DATA
         elif self.state is CStates.CLOSING:
             if self.event is not None:
                 returnable = self.event
                 self.event = None
             else:
                 if self.close_init_client:
-                    returnable = Directive.NEED_DATA
+                    returnable = Information.NEED_DATA
                 if self.close_init_server:
-                    returnable = Directive.SEND_CLOSE
-            return returnable
+                    returnable = Information.SEND_CLOSE
         else:  # self.state is CStates.CLOSED:
-            # this is probably inconsistent
-            return None
+            raise NnwsProtocolError('Trying to recv data on closed connection')
+        return returnable
 
 
 class Recvr:
@@ -167,7 +160,7 @@ class Recvr:
     def await_start(self):
 
         if len(self.buffer) < 2:
-            return Directive.NEED_DATA
+            return Information.NEED_DATA
         self.f = Frame(self.buffer, self.opcodes)
         self.f.proc(self.role)
         if self.f.l_bound:
@@ -182,7 +175,7 @@ class Recvr:
         if bytechunk is not None:
             self.f.buffer.extend(bytechunk)
         if len(self.f.buffer) < 2 + self.f.l_bound:
-            return Directive.NEED_DATA
+            return Information.NEED_DATA
         self.f.expected_len = int.from_bytes(
             self.f.buffer[2:2+self.f.l_bound], 'big')
         if self.f.masked:
@@ -197,12 +190,12 @@ class Recvr:
             self.f.buffer.extend(bytechunk)
         if self.f.l_bound:
             if len(self.f.buffer) < 6 + self.f.l_bound:
-                return Directive.NEED_DATA
+                return Information.NEED_DATA
             self.mask = self.f.buffer[2+self.f.l_bound:6+self.f.l_bound]
             self.f.pl_strt = 7 + self.f.l_bound
         else:
             if len(self.f.buffer) < 7:
-                return Directive.NEED_DATA
+                return Information.NEED_DATA
             self.f.mask = self.f.buffer[2:6]
             self.f.pl_strt = 6
         self.state = RecvrState.NEED_BODY
@@ -212,7 +205,7 @@ class Recvr:
         if bytechunk is not None:
             self.f.buffer.extend(bytechunk)
         if len(self.f.buffer[self.f.pl_strt:]) < self.f.expected_len:
-            return Directive.NEED_DATA
+            return Information.NEED_DATA
         self.f.raw_len = self.f.pl_strt + self.f.expected_len
         if not self.f.masked:
             self.f.payload.extend(self.f.buffer[self.f.pl_strt:self.f.raw_len])
@@ -234,7 +227,7 @@ class Recvr:
                         self.f.payload, self.f.opcode, self.f.resrvd)
                 else:
                     self.data_f = self.f
-                    returnable = Directive.NEED_DATA
+                    returnable = Information.NEED_DATA
             else:
                 self.f = None
                 raise NnwsProtocolError('Attempted to interleave '

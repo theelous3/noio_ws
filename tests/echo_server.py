@@ -63,7 +63,7 @@ async def ws_next_event(sock):
     while True:
         event = wscon.next_event()
         print(event)
-        if event is ws.Directive.NEED_DATA:
+        if event is ws.Information.NEED_DATA:
             stuff = await sock.recv(2048)
             print(stuff)
             wscon.recv(stuff)
