@@ -50,9 +50,6 @@ class WsClient:
             # then send your side of the close:
             # self.send('', 'close')
             # at this point, we can exit the client.
-        elif event.type == 'wang-jangle':
-            ...
-            # do some shit with our custom opcode
 
     def send(self, message, type, fin=True, status_code=None):
         self.sock.sendall(
@@ -127,9 +124,6 @@ class WsClientHandler:
             # then send your side of the close:
             # self.send('', 'close')
             # at this point, we can exit the client.
-        elif event.type == 'wang-jangle':
-            ...
-            # do some shit with our custom opcode
 
     def send(self, message, type, fin=True, status_code=None):
         self.sock.sendall(
