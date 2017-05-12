@@ -58,10 +58,7 @@ class WsClient:
 
     def incoming_message_manager():
         event = self.next_event()
-        if event is ws.Information.NEED_DATA:
-            ...
-            # there is no event
-        elif event.type == 'text':
+        if event.type == 'text':
             ...
             # display the message or whatever
         elif event.type == 'binary':

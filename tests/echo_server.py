@@ -67,7 +67,6 @@ async def ws_next_event(sock):
         event = wscon.next_event()
         if event is ws.Information.NEED_DATA:
             stuff = await sock.recv(2048)
-            print(stuff)
             if not stuff:
                 print('no stuff')
                 raise SystemExit
