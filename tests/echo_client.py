@@ -10,18 +10,26 @@ httpcon = h11.Connection(our_role=h11.CLIENT)  # our h11 http connection
 wscon = ws.Connection('CLIENT')  # our noio_ws websocket connection
 
 
+
 async def main(location):
-    sock = curio.socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    '''
+    sock = await curio.open_connection(
+        location[0], 443, ssl=True, server_hostname=location[0])
+    '''
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     await sock.connect(location)
 
     ws_shaker = utils.Handshake('CLIENT')
-    shake_data = ws_shaker.client_handshake('ws://localhost/chat')
+    shake_data = ws_shaker.client_handshake('ws://localhost:8765')
 
     await http_send(sock, shake_data, h11.EndOfMessage())
+    print('****sent open shake')
     http_response = await http_next_event(sock)
+    print('****', http_response)
 
     http_response = ws_shaker.verify_response(http_response)
+    print('****verified response')
     if isinstance(http_response, h11.Response):
         pass
         # In this case, the server responded with a status code
@@ -34,20 +42,26 @@ async def main(location):
 
     # Let's send a message to an echo server, wait for the response
     # and then close the connection.
-    await curio.sleep(5)
-    await ws_send(sock, 'Hello server!', 'text')
+    from random import choice
+    from string import ascii_lowercase
+    text_to_go = ''.join([choice(ascii_lowercase) for _ in range(70000)])
+    print('****sending message of len', len(text_to_go))
+    await ws_send(sock, text_to_go, 'text', fin=False)
+    await ws_send(sock, 'whew', 'continuation')
+    print('****sent message')
 
     while True:
+        print('****waiting for response message')
         response = await ws_next_event(sock)
+        print('****got message')
         if isinstance(response, ws.Message):
             if response.type == 'close':
                 await ws_send(sock, '', 'close')
-                print('WE EXITED CLEANLY...ISH')
                 await curio.sleep(1)
                 raise SystemExit
             elif response.type == 'text':
                 print(f'Message recieved :D\n{response.message}')
-
+            await ws_send(sock, '', 'close')
 
 
 async def http_send(sock, *events):
@@ -75,11 +89,9 @@ async def ws_next_event(sock):
         event = wscon.next_event()
         if event is ws.Information.NEED_DATA:
             stuff = await sock.recv(2048)
-            print(stuff)
             wscon.recv(stuff)
+            print(vars(wscon.recvr))
             continue
         return event
 
-curio.run(main(('localhost', 25000)))
-
-
+curio.run(main(('localhost', 8765)))

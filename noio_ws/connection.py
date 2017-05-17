@@ -10,8 +10,7 @@ class Connection:
     def __init__(self,
                  role,
                  opcode_type_mod=None,
-                 opcode_control_mod=None,
-                 rsrv_mod=None):
+                 opcode_control_mod=None):
         if role == 'CLIENT':
             self.role = Roles.CLIENT
         elif role == 'SERVER':
@@ -54,7 +53,6 @@ class Connection:
         self.event = None
 
     def recv(self, bytechunk):
-        print('gonna recv')
         event = self.recvr(bytechunk)
         if self.state is CStates.OPEN:
             if isinstance(event, Message):
@@ -161,7 +159,7 @@ class Recvr:
 
         if len(self.buffer) < 2:
             return Information.NEED_DATA
-        self.f = Frame(self.buffer, self.opcodes)
+        self.f = FrameParser(self.buffer, self.opcodes)
         self.f.proc(self.role)
         if self.f.l_bound:
             self.state = RecvrState.NEED_LEN
@@ -171,21 +169,19 @@ class Recvr:
             self.state = RecvrState.NEED_BODY
 
     def need_len(self, bytechunk):
-        print('We find da len')
         if bytechunk is not None:
             self.f.buffer.extend(bytechunk)
         if len(self.f.buffer) < 2 + self.f.l_bound:
             return Information.NEED_DATA
         self.f.expected_len = int.from_bytes(
-            self.f.buffer[2:2+self.f.l_bound], 'big')
+            self.f.buffer[2:self.f.l_bound], 'big')
         if self.f.masked:
             self.state = RecvrState.NEED_MASK
         else:
-            self.f.pl_strt = 2 + self.f.l_bound
+            self.f.pl_strt = self.f.l_bound
             self.state = RecvrState.NEED_BODY
 
     def need_mask(self, bytechunk):
-        print('We gettin da mesk')
         if bytechunk is not None:
             self.f.buffer.extend(bytechunk)
         if self.f.l_bound:
@@ -201,7 +197,6 @@ class Recvr:
         self.state = RecvrState.NEED_BODY
 
     def need_body(self, bytechunk):
-        print('We need gettin da bodi')
         if bytechunk is not None:
             self.f.buffer.extend(bytechunk)
         if len(self.f.buffer[self.f.pl_strt:]) < self.f.expected_len:
@@ -216,7 +211,6 @@ class Recvr:
         self.state = RecvrState.MSG_RECVD
 
     def msg_recvd(self):
-        print('We has da mesug')
         self.buffer = self.f.buffer[self.f.raw_len:]
         if self.f.opcode in TYPE_FRAMES:
             if not self.data_f:

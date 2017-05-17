@@ -7,6 +7,7 @@ import h11
 import noio_ws as ws
 
 from .constants import *
+from .errors import NnwsProtocolError
 
 __all__ = ['Handshake']
 
@@ -84,11 +85,11 @@ class Handshake:
         if not response.status_code == 101:
             return False, response, None
         try:
-            assert response.headers[b'upgrade'] == b'websocket'
+            assert response.headers[b'upgrade'].lower() == b'websocket'
         except (KeyError, AssertionError):
             raise NnwsProtocolError('Invalid response on upgrade header')
         try:
-            assert response.headers[b'connection'] == b'upgrade'
+            assert response.headers[b'connection'].lower() == b'upgrade'
         except (KeyError, AssertionError):
             raise NnwsProtocolError('Invalid response on connection header')
         try:

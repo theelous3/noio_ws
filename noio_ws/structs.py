@@ -4,7 +4,7 @@ from .constants import *
 from .utils import mask_unmask
 
 
-__all__ = ['Frame', 'Message', 'Data']
+__all__ = ['FrameParser', 'Message', 'Data']
 
 
 class Message:
@@ -176,9 +176,9 @@ class Data:
                                     '{}/125:'.format(data_len))
 
         if len_flag == 126:
-            bytes_to_go.append(data_len.to_bytes(2, 'big'))
+            bytes_to_go.extend(data_len.to_bytes(2, 'big'))
         elif len_flag == 127:
-            bytes_to_go.append(data_len.to_bytes(8, 'big'))
+            bytes_to_go.extend(data_len.to_bytes(8, 'big'))
 
         if mask is not None:
             bytes_to_go.extend(mask)
