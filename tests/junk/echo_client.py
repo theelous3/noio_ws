@@ -10,7 +10,6 @@ httpcon = h11.Connection(our_role=h11.CLIENT)  # our h11 http connection
 wscon = ws.Connection('CLIENT')  # our noio_ws websocket connection
 
 
-
 async def main(location):
     '''
     sock = await curio.open_connection(
@@ -24,12 +23,9 @@ async def main(location):
     shake_data = ws_shaker.client_handshake('ws://localhost:8765')
 
     await http_send(sock, shake_data, h11.EndOfMessage())
-    print('****sent open shake')
     http_response = await http_next_event(sock)
-    print('****', http_response)
 
     http_response = ws_shaker.verify_response(http_response)
-    print('****verified response')
     if isinstance(http_response, h11.Response):
         pass
         # In this case, the server responded with a status code
@@ -45,15 +41,10 @@ async def main(location):
     from random import choice
     from string import ascii_lowercase
     text_to_go = ''.join([choice(ascii_lowercase) for _ in range(70000)])
-    print('****sending message of len', len(text_to_go))
-    await ws_send(sock, text_to_go, 'text', fin=False)
-    await ws_send(sock, 'whew', 'continuation')
-    print('****sent message')
+    await ws_send(sock, text_to_go, 'text')
 
     while True:
-        print('****waiting for response message')
         response = await ws_next_event(sock)
-        print('****got message')
         if isinstance(response, ws.Message):
             if response.type == 'close':
                 await ws_send(sock, '', 'close')
