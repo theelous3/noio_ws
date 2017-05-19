@@ -39,7 +39,7 @@ It's best to wrap this workflow in a greater ``next_event()`` function. like so:
 
 This function will only ever return ``Message`` objects, which are nice ways of handling a received websocket frame.
 
-*You can get more information about the ``message`` object mentioned above, and ``Data`` object mentioned below, `here <fake_link.com>`_ .*
+*You can get more information about the ``message`` object mentioned above, and ``Data`` object mentioned below,* `here <http://noio-ws.readthedocs.io/en/latest/api.html#data-object>`_ .
 
 To send data, we use the ``Data`` object. It's also best to create a greater ``ws_send()`` function, much like ``ws_next_event()`` above. ::
 
@@ -50,7 +50,7 @@ To use this ``ws_send()`` function to send a 'hello world!' message, we'd simply
 
     ws_send('hello world!', 'text')
 
-As you should know from reading the 'stuff you gotta know' section, there are multiple types of frames you may receive at any given time, and you have to respond to them appropriately.
+As you should know from reading the `'stuff you gotta know' <http://noio-ws.readthedocs.io/en/latest/overview_of_websockets.html#things-you-absolutely-must-know-in-order-to-write-a-websocket-client-or-server>`_ section, there are multiple types of frames you may receive at any given time, and you have to respond to them appropriately.
 
 Of course you can write this yourself any way you please, but you'll probably want some kind of managerial function to deal with these different frame types, like the following::
 
