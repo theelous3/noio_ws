@@ -3,7 +3,7 @@ import curio
 from curio import socket
 
 import noio_ws as ws
-from noio_ws import utils
+from noio_ws.handshake_utils import Handshake
 from noio_ws.errors import NnwsProtocolError
 
 httpcon = h11.Connection(our_role=h11.CLIENT)  # our h11 http connection
@@ -19,8 +19,8 @@ async def main(location):
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     await sock.connect(location)
 
-    ws_shaker = utils.Handshake('CLIENT')
-    shake_data = ws_shaker.client_handshake('ws://localhost:8765')
+    ws_shaker = Handshake('CLIENT')
+    shake_data = ws_shaker.client_handshake('ws://echo.websocket.org')
 
     await http_send(sock, shake_data, h11.EndOfMessage())
     http_response = await http_next_event(sock)
@@ -40,7 +40,7 @@ async def main(location):
     # and then close the connection.
     from random import choice
     from string import ascii_lowercase
-    text_to_go = ''.join([choice(ascii_lowercase) for _ in range(70000)])
+    text_to_go = ''.join([choice(ascii_lowercase) for _ in range(200)])
     await ws_send(sock, text_to_go, 'text')
 
     while True:
@@ -85,4 +85,4 @@ async def ws_next_event(sock):
             continue
         return event
 
-curio.run(main(('localhost', 8765)))
+curio.run(main(('echo.websocket.org', 80)))

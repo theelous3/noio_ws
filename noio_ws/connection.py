@@ -1,7 +1,7 @@
 from .errors import NnwsProtocolError
 from .structs import *
 from .constants import *
-from .utils import mask_unmask
+from .handshake_utils import mask_unmask
 
 __all__ = ['Connection']
 
@@ -75,15 +75,15 @@ class Connection:
             raise NnwsProtocolError('Trying to recv data on closed connection')
 
     def send(self, data):
+        assert isinstance(data, Data)
         if self.state is CStates.OPEN:
-            if isinstance(data, Data):
-                byteball, close = data(self.role, self.opcodes)
-                if close:
-                    if self.close_init_server:
-                        self.state = CStates.CLOSED
-                    else:
-                        self.close_init_client = True
-                        self.state = CStates.CLOSING
+            byteball, close = data(self.role, self.opcodes)
+            if close:
+                if self.close_init_server:
+                    self.state = CStates.CLOSED
+                else:
+                    self.close_init_client = True
+                    self.state = CStates.CLOSING
         elif self.state is CStates.CLOSING:
             byteball, close = data(self.role, self.opcodes)
             if not close:

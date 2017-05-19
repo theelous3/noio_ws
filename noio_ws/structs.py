@@ -1,7 +1,8 @@
 from random import getrandbits
+from datetime import datetime
 
 from .constants import *
-from .utils import mask_unmask
+from .handshake_utils import mask_unmask
 
 
 __all__ = ['FrameParser', 'Message', 'Data']
@@ -12,6 +13,16 @@ class Message:
         self.message = message
         self.type = type
         self.reserved = reserved
+        self.time = datetime.now()
+
+    def __repr__(self):
+        repr_str = 'Message {}:(message="{}", type="{}", reserved={}, time={})'
+        return repr_str.format(
+            hex(id(self)),
+            str(self.message[:9]) + ('[...]' if len(self.message) > 9 else ''),
+            self.type,
+            self.reserved,
+            self.time)
 
 
 class FrameParser:
