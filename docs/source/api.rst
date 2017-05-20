@@ -4,13 +4,13 @@ noio_ws API
 ``Connection`` object
 _____________________
 
-.. py:class:: Connection(role, opcode_type_mod=None, opcode_control_mod=None)
+.. py:class:: Connection(role, opcode_non_control_mod=None, opcode_control_mod=None)
 
     The connection object which acts as a middle man between your application logic and your network io.
 
     :param str role: Either ``'CLIENT'`` or ``'SERVER'`` used to set the Connection 's role.
-    :param dict opcode_type_mod: For example ``{'latin-1': 3}``. ``opcode_type_mod`` adds extensibility for non-control frames. Valid ints are 3-7.
-    :param dict opcode_control_mod: For example ``{'compare': 11}``. ``opcode_type_mod`` adds extensibility for control frames. Vaid ints are 11-15.
+    :param dict opcode_non_control_mod: For example ``{'latin-1': 3}``. This adds extensibility for non-control frames. Valid ints are 3-7.
+    :param dict opcode_control_mod: For example ``{'compare': 11}``. This adds extensibility for control frames. Vaid ints are 11-15.
 
     .. py:method:: send(self, data)
 
@@ -43,9 +43,9 @@ _______________
     :param str type: The name of the opcode for the frame. For example ``'text'``.
     :param bool fin: Indicates if the frame is the last the series.
     :param int status_code: The int representing the status close for ``close`` frames.
-    :param int rsv_1: Passing ``1`` turns on rsv bit 1.
-    :param int rsv_2: Passing ``2`` turns on rsv bit 2.
-    :param int rsv_3: Passing ``3`` turns on rsv bit 3.
+    :param int rsv_1: Passing ``1`` turns on the frame's first reserved bit.
+    :param int rsv_2: Passing ``1`` turns on the frame's second reserved bit.
+    :param int rsv_3: Passing ``1`` turns on the frame's third reserved bit.
 
 ``Message`` object
 __________________

@@ -35,6 +35,8 @@ If you send or receive a ``close`` frame, any further stuff received that is not
 
 It is not required to understand everything on this page in order to effectively write a websocket client or server. However, if you're making something non-trivial you will probably want to be familiar with the stuff above, and general concepts like the structure of a websocket frame, opcodes, fin bit, rsrv bits, extension/subprotocol headers.
 
+**Thus ends the 'things you absolutely must know' section.**
+
 The websocket connection lifespan and frame structure.
 ______________________________________________________
 

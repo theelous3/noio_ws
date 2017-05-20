@@ -9,7 +9,7 @@ __all__ = ['Connection']
 class Connection:
     def __init__(self,
                  role,
-                 opcode_type_mod=None,
+                 opcode_non_control_mod=None,
                  opcode_control_mod=None):
         if role == 'CLIENT':
             self.role = Roles.CLIENT
@@ -28,14 +28,14 @@ class Connection:
                         'close': 8,
                         'ping': 9,
                         'pong': 10}
-        if opcode_type_mod:
+        if opcode_non_control_mod:
             if all(opcode != given_opcode and given_opcode < 15
                    for _, opcode in self.opcodes.items()
-                   for _, given_opcode in opcode_type_mod):
-                self.opcodes.update(opcode_type_mod)
+                   for _, given_opcode in opcode_non_control_mod):
+                self.opcodes.update(opcode_non_control_mod)
                 global TYPE_FRAMES
                 TYPE_FRAMES.extend([opphrase for opphrase, _ in
-                                    opcode_type_mod.items()])
+                                    opcode_non_control_mod.items()])
             else:
                 raise ValueError('Cannot overwrite default opcode.')
         if opcode_control_mod:
