@@ -309,9 +309,9 @@ Here's the new client example in full: ::
             # spawn an x to control incoming messages
             self.incoming_message_manager()
 
-        def incoming_message_manager():
+        def incoming_message_manager(self):
             while True:
-                event = ws_next_event()
+                event = self.ws_next_event()
 
                 # here we check for compression, and decompress if needed
                 # adding extensions is easy!
