@@ -22,32 +22,30 @@ class Connection:
         self.close_init_client = False
         self.close_init_server = False
 
-        self.opcodes = {'continuation': 0,
-                        'text': 1,
-                        'binary': 2,
-                        'close': 8,
-                        'ping': 9,
-                        'pong': 10}
+        self.opcodes = {0: 'continuation',
+                        1: 'text',
+                        2: 'binary',
+                        8: 'close',
+                        9: 'ping',
+                        10: 'pong'}
         if opcode_non_control_mod:
-            if all(opcode != given_opcode and given_opcode < 15
-                   for _, opcode in self.opcodes.items()
-                   for _, given_opcode in opcode_non_control_mod):
-                self.opcodes.update(opcode_non_control_mod)
-                global TYPE_FRAMES
-                TYPE_FRAMES.extend([opphrase for opphrase, _ in
-                                    opcode_non_control_mod.items()])
-            else:
-                raise ValueError('Cannot overwrite default opcode.')
+            for opcode in opcode_non_control_mod:
+                if not (2 < opcode < 8):
+                    raise ValueError('Opcode out of non-control frame range:',
+                                     opcode)
+            global TYPE_FRAMES
+            TYPE_FRAMES.extend([opphrase for _, opphrase in
+                                opcode_non_control_mod.items()])
+            self.opcodes.update(opcode_non_control_mod)
         if opcode_control_mod:
-            if all(opcode != given_opcode and given_opcode < 15
-                   for _, opcode in self.opcodes.items()
-                   for _, given_opcode in opcode_control_mod):
-                self.opcodes.update(opcode_control_mod)
-                global CONTROL_FRAMES
-                CONTROL_FRAMES.extend([opphrase for opphrase, _
-                                       in opcode_control_mod.items()])
-            else:
-                raise ValueError('Cannot overwrite default opcode.')
+            for opcode in opcode_control_mod:
+                if not (10 < opcode < 16):
+                    raise ValueError('Opcode out of control frame range:',
+                                     opcode)
+            global CONTROL_FRAMES
+            CONTROL_FRAMES.extend([opphrase for _, opphrase in
+                                   opcode_control_mod.items()])
+            self.opcodes.update(opcode_control_mod)
 
         self.recvr = Recvr(self.role, self.opcodes)
         self.event = None

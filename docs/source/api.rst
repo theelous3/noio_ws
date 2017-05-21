@@ -9,8 +9,8 @@ _____________________
     The connection object which acts as a middle man between your application logic and your network io.
 
     :param str role: Either ``'CLIENT'`` or ``'SERVER'`` used to set the Connection 's role.
-    :param dict opcode_non_control_mod: For example ``{'latin-1': 3}``. This adds extensibility for non-control frames. Valid ints are 3-7.
-    :param dict opcode_control_mod: For example ``{'compare': 11}``. This adds extensibility for control frames. Vaid ints are 11-15.
+    :param dict opcode_non_control_mod: For example ``{3: 'latin-1'}``. This adds extensibility for non-control frames. Valid ints are 3-7.
+    :param dict opcode_control_mod: For example ``{11: 'compare'}``. This adds extensibility for control frames. Vaid ints are 11-15.
 
     .. py:method:: send(self, data)
 

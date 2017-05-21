@@ -58,7 +58,7 @@ class FrameParser:
 
         try:
             self.opcode = next(
-                (ophrase for ophrase, opcode in self.opcodes.items()
+                (ophrase for opcode, ophrase  in self.opcodes.items()
                  if b1 & 0b1111 == opcode))
         except StopIteration:
             raise NnwsProtocolError('Invalid opcode received.')
@@ -157,7 +157,7 @@ class Data:
         if self.rsv_3:
             byte_0 = byte_0 | 1 << 4
 
-        opcode = opcodes[self.type]
+        opcode = next((k for k, v in opcodes.items() if v == self.type))
         byte_0 = byte_0 | opcode
         bytes_to_go.append(byte_0)
 

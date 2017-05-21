@@ -7,7 +7,7 @@ setup(
     description='noio_ws - sans-io websockets',
     long_description='A sans-io python implementation of the websocket protocol',
     license='MIT',
-    version='0.0.1',
+    version='0.0.2',
     author='Mark Jameson - aka theelous3',
     url='https://github.com/theelous3/noio_ws',
     packages=['noio_ws'],

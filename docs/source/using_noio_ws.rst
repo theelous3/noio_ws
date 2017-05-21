@@ -211,8 +211,8 @@ And here is an example server ::
     websock_server = WsServer()
     websock_server.main(('some_location.com', 80))
 
-Extension and new opcode example
-________________________________
+Extensions, reserved bits and opcodes example
+_____________________________________________
 
 In the previous section we took a look at a client and server that use the base opcodes, default reserved bits, and did nothin' fancy. Here we will write a similar example, adding a custom control frame, non-control frame, and implement a basic compression extension.
 
@@ -224,9 +224,9 @@ As before we'll begin by instancing our ``Connection`` object, though we'll pass
     from time import time
 
     # We'll add a new control frame that sends the current unix time when requested.
-    new_control_frame = {'time': 11}
+    new_control_frame = {11: 'time'}
     # We'll add a new non-control frame to indicate our message is ascii compatible.
-    new_non_control_frame = {'ascii', 3}
+    new_non_control_frame = {3: 'ascii'}
 
     ws_conn = ws.Connection('CLIENT',
                             opcode_non_control_mod=new_non_control_frame,
@@ -298,8 +298,8 @@ Here's the new client example in full: ::
 
             self.ws_conn = ws.Connection(
                 'CLIENT',
-                opcode_non_control_mod={'ascii', 3},
-                opcode_control_mod={'time': 11})
+                opcode_non_control_mod={3: 'ascii'},
+                opcode_control_mod={11: 'time'})
 
         def main(self, location):
             self.sock.connect(location)
