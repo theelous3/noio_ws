@@ -1,4 +1,4 @@
-.. noio_ws documentation master file, created by sphinx-quickstart, Wed May 17 17:03:44 2017.
+.. noio_ws documentation master file, created by sphinx-quickstart, Wed May 17 17:03:44 2017. Thanks sphinx! :D
 
 
 noio_ws
@@ -21,6 +21,7 @@ noio_ws is a sans-io implementation of the websocket protocol for use in creatin
 
 It's api is modeled after the wonderful `h11 <https://github.com/njsmith/h11>`_ httplib, employing a state-machine-y core that spits out events.
 
+
 How does noio_ws treat the websocket protocol?
 ______________________________________________
 
@@ -31,11 +32,12 @@ To this end, noio_ws comes with a set of handshake utilities which are direct ad
 Installation
 ____________
 
-noio_ws requires python 3.x+ and if you want to use the handshake utils to manage opening the connection it requires h11 too.
+noio_ws requires python 3.x+.
 
-You can install both by doing::
+Install by doing::
 
     pip install git+https://github.com/theelous3/noio_ws.git
+    # comes with h11
 
 Features
 ________

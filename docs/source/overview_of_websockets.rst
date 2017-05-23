@@ -35,6 +35,8 @@ If you send or receive a ``close`` frame, any further stuff received that is not
 
 It is not required to understand everything on this page in order to effectively write a websocket client or server. However, if you're making something non-trivial you will probably want to be familiar with the stuff above, and general concepts like the structure of a websocket frame, opcodes, fin bit, rsrv bits, extension/subprotocol headers.
 
+Any and all protocol violations, regardless of how minor they are, must result in the (if possible) immediate sending of a ``close`` frame and (regardless of if possible) closure of the connection.
+
 **Thus ends the 'things you absolutely must know' section.**
 
 The websocket connection lifespan and frame structure.
@@ -79,7 +81,6 @@ In the ``open`` state, both client and server may send any type of message to ea
 * Non-control frames may not interleave other non-control frames. (If you are sending a non-control message over multiple frames, control frames may interrupt at any point, however frames like 'text' and 'binary' may not.)
 * If either side sends a frame who's opcode indicates a ``close`` the connection moves from ``open`` to ``closing`` and all further frames must be discarded. The side that received the ``close`` must respond with a ``close`` frame in kind, placing both sides in a ``closed`` state and ending the websocket connection.
 
-Note: any and all protocol violations, regardless of how minor they are, must result in the (if possible) immediate sending of a ``close`` frame and closure of the connection.
 
 The opening handshake
 _____________________

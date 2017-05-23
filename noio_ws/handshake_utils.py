@@ -189,3 +189,35 @@ def mask_unmask(data, mask):
     for i, x in enumerate(data):
         data[i] = x ^ mask[i % 4]
     return data
+
+
+def parse_exten_subproto_headers(header):
+    all_vals = header.replace(', ', ',').split(',')
+    results = []
+    for item in all_vals:
+        sub_val = item.split(';')
+        val_details = {}
+        name, *params = sub_val
+        val_details['name'] = name
+        if params:
+            for param in params:
+                arg, value = param.split('=')
+                try:
+                    val_details[arg] = value
+                except IndexError:
+                    val_details[arg] = None
+        results.append(val_details)
+    return results
+
+
+def make_exten_subproto_headers(header_items):
+    header_fields = []
+    for item in header_items:
+        header_holding = []
+        header_holding.append(item.pop('name'))
+        if item:
+            for k, v in item.items():
+                header_holding.append('='.join([k, v]))
+        header_fields.append(';'.join(header_holding))
+    print(header_fields)
+    return ', '.join(header_fields)
