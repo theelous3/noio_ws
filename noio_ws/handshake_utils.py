@@ -2,6 +2,7 @@ from urllib.parse import urlparse, urlunparse
 from random import randint, getrandbits
 from base64 import b64encode, b64decode
 from hashlib import sha1
+from collections import OrderedDict
 
 import h11
 import noio_ws as ws
@@ -33,7 +34,7 @@ def compare_headers(req_header_items, resp_header_item):
 
 
 class Handshake:
-    def __init__(self, role, subprotocols=None, extensions=None):
+    def __init__(self, role):
         if role == 'CLIENT':
             self.role = Roles.CLIENT
         elif role == 'SERVER':
@@ -49,7 +50,11 @@ class Handshake:
         self.subprotocols = subprotocols
         self.extensions = extensions
 
-    def client_handshake(self, uri, **kwargs):
+    def client_handshake(self, uri, *,
+                         subprotocols=None,
+                         extensions=None,
+                         **kwargs):
+
         scheme, netloc, path, _, _, _ = urlparse(uri)
         try:
             netloc, port = netloc.split(':', 1)
@@ -69,9 +74,11 @@ class Handshake:
                    'sec-websocket-key': self.nonce,
                    'sec-websocket-version': '13'}
         if self.subprotocols is not None:
-            headers.update({'sec-websocket-protocol': self.subprotocols})
+            headers['sec-websocket-protocol'] = addon_header_str_ifier(
+                subprotocols)
         if self.extensions is not None:
-            headers.update({'sec-websocket-extensions': self.extensions})
+            headers['sec-websocket-extensions'] = addon_header_str_ifier(
+                extensions)
         if kwargs:
             headers.update(kwargs)
 
@@ -81,93 +88,48 @@ class Handshake:
         return handshake
 
     def verify_response(self, response):
-        response.headers = dict(response.headers)
+        headers = dict(response.headers)
         if not response.status_code == 101:
             return False, response, None
         try:
-            assert response.headers[b'upgrade'].lower() == b'websocket'
+            assert headers[b'upgrade'].lower() == b'websocket'
         except (KeyError, AssertionError):
             raise NnwsProtocolError('Invalid response on upgrade header')
         try:
-            assert response.headers[b'connection'].lower() == b'upgrade'
+            assert headers[b'connection'].lower() == b'upgrade'
         except (KeyError, AssertionError):
             raise NnwsProtocolError('Invalid response on connection header')
         try:
-            accept_key = response.headers[b'sec-websocket-accept']
+            accept_key = headers[b'sec-websocket-accept']
             magic_nonce = secondary_nonce_creator(self.nonce)
             assert accept_key == magic_nonce
         except (KeyError, AssertionError):
             raise NnwsProtocolError('Invalid response on sec-websocket'
                                     '-accept header')
 
-        compare_extensions = None
-        try:
-            resp_extensions = response.headers[b'sec-websocket-extensions']
-
-            compare_extensions = compare_headers(
-                self.extensions, str(resp_extensions, 'utf-8'))
-            assert compare_extensions
-        except KeyError:
-            pass
-        except AssertionError:
-            raise NnwsProtocolError('Invalid extension in response')
-
-        compare_protocols = None
-        try:
-            resp_protocols = response.headers[b'sec-websocket-protocol']
-
-            compare_protocols = compare_headers(
-                self.subprotocols, str(resp_protocols, 'utf-8'))
-            assert compare_protocols
-        except KeyError:
-            pass
-        except AssertionError:
-            raise NnwsProtocolError('Invalid protocol in response')
-        return compare_protocols, compare_extensions
+        return self.parse_response_for_addons(response)
 
     def verify_request(self, request):
-        request.headers = dict(request.headers)
+        headers = dict(request.headers)
         try:
-            assert request.headers[b'upgrade'] == b'websocket'
+            assert headers[b'upgrade'] == b'websocket'
         except (KeyError, AssertionError):
             raise NnwsProtocolError('Invalid request on upgrade header')
         try:
-            assert request.headers[b'connection'] == b'upgrade'
+            assert headers[b'connection'] == b'upgrade'
         except (KeyError, AssertionError):
             raise NnwsProtocolError('Invalid request on connection header')
         try:
-            self.nonce = request.headers[b'sec-websocket-key']
+            self.nonce = headers[b'sec-websocket-key']
             assert len(b64decode(str(self.nonce, 'utf-8'))) == 16
         except (KeyError, AssertionError):
             raise NnwsProtocolError('Bad nonce from client')
-
-        compare_extensions = None
         try:
-            req_extensions = request.headers[b'sec-websocket-extensions']
-            compare_extensions = compare_headers(
-                self.extensions, str(req_extensions, 'utf-8'))
-            assert compare_extensions
-        except KeyError:
-            pass
-        except AssertionError:
-            raise NnwsProtocolError('Invalid extension in request')
-
-        compare_protocols = None
-        try:
-            req_protocols = request.headers[b'sec-websocket-protocol']
-            compare_protocols = compare_headers(
-                self.subprotocols, str(req_protocols, 'utf-8'))
-            assert compare_protocols
-        except KeyError:
-            pass
-        except AssertionError:
-            raise NnwsProtocolError('Invalid protocol in response')
-
-        try:
-            assert request.headers[b'sec-websocket-version'] == b'13'
+            assert headers[b'sec-websocket-version'] == b'13'
         except (KeyError, AssertionError):
             raise NnwsProtocolError('Bad version from client')
-        return compare_extensions, compare_protocols
+
+        return self.parse_response_for_addons(request)
 
     def server_handshake(self, **kwargs):
         headers = {'upgrade': 'websocket',
@@ -175,15 +137,31 @@ class Handshake:
                    'sec-websocket-accept': secondary_nonce_creator(self.nonce),
                    'sec-websocket-version': '13'}
         if self.subprotocols:
-            headers.update({'sec-websocket-protocol': self.subprotocols})
+            headers['sec-websocket-protocol'] = self.addon_header_str_ifier(
+                self.subprotocols)
         if self.extensions:
-            headers.update({'sec-websocket-extensions': self.extensions})
+            headers['sec-websocket-extensions'] = self.addon_header_str_ifier(
+                self.extensions)
         if kwargs:
             headers.update(kwargs)
         return h11.InformationalResponse(
             status_code=101, reason='Switching Protocols',
             headers=headers.items())
 
+    @staticmethod
+    def parse_response_for_addons(response_obj):
+        extension_headers = []
+        subprotocol_headers = []
+        for header in response.headers:
+            if header[0] == b'sec-websocket-extensions':
+                extension_headers.append(header[1].decode('utf-8'))
+            elif header[0] == b'sec-websocket-protocols':
+                subprotocol_headers.append(header[1].decode('utf-8'))
+
+        compare_extensions = parse_addon_header(','.join(extension_headers))
+        compare_protocols = parse_addon_header(','.join(subprotocol_headers))
+
+        return compare_extensions, compare_protocols
 
 def mask_unmask(data, mask):
     for i, x in enumerate(data):
@@ -191,7 +169,7 @@ def mask_unmask(data, mask):
     return data
 
 
-def parse_exten_subproto_headers(header):
+def parse_addon_header(header):
     all_vals = header.replace(', ', ',').split(',')
     results = []
     for item in all_vals:
@@ -210,7 +188,8 @@ def parse_exten_subproto_headers(header):
     return results
 
 
-def make_exten_subproto_headers(header_items):
+def addon_header_str_ifier(header_items):
+    assert isinstance(header_items, OrderedDict)
     header_fields = []
     for item in header_items:
         header_holding = []
