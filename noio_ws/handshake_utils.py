@@ -73,10 +73,10 @@ class Handshake:
                    'connection': 'upgrade',
                    'sec-websocket-key': self.nonce,
                    'sec-websocket-version': '13'}
-        if self.subprotocols is not None:
+        if subprotocols is not None:
             headers['sec-websocket-protocol'] = addon_header_str_ifier(
                 subprotocols)
-        if self.extensions is not None:
+        if extensions is not None:
             headers['sec-websocket-extensions'] = addon_header_str_ifier(
                 extensions)
         if kwargs:
