@@ -24,15 +24,6 @@ def secondary_nonce_creator(nonce):
     return concatd_nonce
 
 
-def compare_headers(req_header_items, resp_header_item):
-    resp_header_items = str(resp_header_item, 'utf-8').split(', ')
-    matches = []
-    for header in req_header_items:
-        if header in resp_header_items:
-            matches.append(header)
-    return matches
-
-
 class Handshake:
     def __init__(self, role):
         if role == 'CLIENT':
@@ -47,8 +38,6 @@ class Handshake:
             self.hcon = h11.Connection(our_role=h11.SERVER)
 
         self.nonce = None
-        self.subprotocols = subprotocols
-        self.extensions = extensions
 
     def client_handshake(self, uri, *,
                          subprotocols=None,
@@ -74,10 +63,10 @@ class Handshake:
                    'sec-websocket-key': self.nonce,
                    'sec-websocket-version': '13'}
         if subprotocols is not None:
-            headers['sec-websocket-protocol'] = addon_header_str_ifier(
+            headers['sec-websocket-protocol'] = self._addon_header_str_ifier(
                 subprotocols)
         if extensions is not None:
-            headers['sec-websocket-extensions'] = addon_header_str_ifier(
+            headers['sec-websocket-extensions'] = self._addon_header_str_ifier(
                 extensions)
         if kwargs:
             headers.update(kwargs)
@@ -107,7 +96,7 @@ class Handshake:
             raise NnwsProtocolError('Invalid response on sec-websocket'
                                     '-accept header')
 
-        return self.parse_response_for_addons(response)
+        return self._parse_response_for_addons(response)
 
     def verify_request(self, request):
         headers = dict(request.headers)
@@ -129,18 +118,21 @@ class Handshake:
         except (KeyError, AssertionError):
             raise NnwsProtocolError('Bad version from client')
 
-        return self.parse_response_for_addons(request)
+        return self._parse_response_for_addons(request)
 
-    def server_handshake(self, **kwargs):
+    def server_handshake(self,
+                         subprotocols=None,
+                         extensions=None,
+                         **kwargs):
         headers = {'upgrade': 'websocket',
                    'connection': 'upgrade',
                    'sec-websocket-accept': secondary_nonce_creator(self.nonce),
                    'sec-websocket-version': '13'}
-        if self.subprotocols:
-            headers['sec-websocket-protocol'] = self.addon_header_str_ifier(
+        if subprotocols:
+            headers['sec-websocket-protocol'] = self._addon_header_str_ifier(
                 self.subprotocols)
-        if self.extensions:
-            headers['sec-websocket-extensions'] = self.addon_header_str_ifier(
+        if extensions:
+            headers['sec-websocket-extensions'] = self._addon_header_str_ifier(
                 self.extensions)
         if kwargs:
             headers.update(kwargs)
@@ -148,55 +140,52 @@ class Handshake:
             status_code=101, reason='Switching Protocols',
             headers=headers.items())
 
-    @staticmethod
-    def parse_response_for_addons(response_obj):
+    def _parse_response_for_addons(self, response_obj):
         extension_headers = []
         subprotocol_headers = []
-        for header in response.headers:
+        for header in response_obj.headers:
             if header[0] == b'sec-websocket-extensions':
                 extension_headers.append(header[1].decode('utf-8'))
             elif header[0] == b'sec-websocket-protocols':
                 subprotocol_headers.append(header[1].decode('utf-8'))
 
-        compare_extensions = parse_addon_header(','.join(extension_headers))
-        compare_protocols = parse_addon_header(','.join(subprotocol_headers))
+        extensions = self._parse_addon_header(','.join(extension_headers))
+        protocols = self._parse_addon_header(','.join(subprotocol_headers))
 
-        return compare_extensions, compare_protocols
+        return extensions, protocols
+
+    def _parse_addon_header(self, header):
+        all_vals = header.replace(', ', ',').split(',')
+        results = OrderedDict()
+        for item in all_vals:
+            sub_val = item.split(';')
+            val_details = {}
+            name, *params = sub_val
+            if params:
+                for param in params:
+                    arg, value = param.strip().split('=')
+                    try:
+                        val_details[arg] = value
+                    except IndexError:
+                        val_details[arg] = None
+            results[name] = val_details
+        return results
+
+    def _addon_header_str_ifier(self, header_items):
+        assert isinstance(header_items, OrderedDict)
+        header_fields = []
+        for item in header_items:
+            header_holding = []
+            header_holding.append(item.pop('name'))
+            if item:
+                for k, v in item.items():
+                    header_holding.append('='.join([k, v]))
+            header_fields.append(';'.join(header_holding))
+        print(header_fields)
+        return ', '.join(header_fields)
+
 
 def mask_unmask(data, mask):
     for i, x in enumerate(data):
         data[i] = x ^ mask[i % 4]
     return data
-
-
-def parse_addon_header(header):
-    all_vals = header.replace(', ', ',').split(',')
-    results = []
-    for item in all_vals:
-        sub_val = item.split(';')
-        val_details = {}
-        name, *params = sub_val
-        val_details['name'] = name
-        if params:
-            for param in params:
-                arg, value = param.split('=')
-                try:
-                    val_details[arg] = value
-                except IndexError:
-                    val_details[arg] = None
-        results.append(val_details)
-    return results
-
-
-def addon_header_str_ifier(header_items):
-    assert isinstance(header_items, OrderedDict)
-    header_fields = []
-    for item in header_items:
-        header_holding = []
-        header_holding.append(item.pop('name'))
-        if item:
-            for k, v in item.items():
-                header_holding.append('='.join([k, v]))
-        header_fields.append(';'.join(header_holding))
-    print(header_fields)
-    return ', '.join(header_fields)
