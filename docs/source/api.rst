@@ -16,7 +16,7 @@ _____________________
 
         Prepares Frame objects, returning bytes ready to be sent over the network.
 
-        :param Data data: Given a ``Data`` object, returns a ``bytes`` object representing a websocket frame suitable to be sent over a network.
+        :param Frame frame: Given a ``Frame`` object, returns a ``bytes`` object representing a websocket frame suitable to be sent over a network.
         :returns: None
 
     .. py:method:: recv(self, bytechunk)

@@ -4,7 +4,6 @@ from curio import socket
 
 import noio_ws as ws
 from noio_ws.handshake_utils import Handshake
-from noio_ws.errors import NnwsProtocolError
 
 from random import choice
 from string import ascii_lowercase
