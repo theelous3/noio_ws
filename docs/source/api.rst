@@ -12,9 +12,9 @@ _____________________
     :param dict opcode_non_control_mod: For example ``{3: 'latin-1'}``. This adds extensibility for non-control frames. Valid ints are 3-7.
     :param dict opcode_control_mod: For example ``{11: 'compare'}``. This adds extensibility for control frames. Vaid ints are 11-15.
 
-    .. py:method:: send(self, data)
+    .. py:method:: send(self, frame)
 
-        Prepares Data objects, returning bytes ready to be sent over the network.
+        Prepares Frame objects, returning bytes ready to be sent over the network.
 
         :param Data data: Given a ``Data`` object, returns a ``bytes`` object representing a websocket frame suitable to be sent over a network.
         :returns: None
@@ -32,10 +32,10 @@ _____________________
 
         :returns: ``Message`` object or ``Information.NEED_DATA``
 
-``Data`` object
+``Frame`` object
 _______________
 
-.. py:class:: Data(self, data, type, fin=True, status_code=None, rsv_1=None, rsv_2=None, rsv_3=None)
+.. py:class:: Frame(self, data, type, fin=True, status_code=None, rsv_1=None, rsv_2=None, rsv_3=None)
 
     The object used to represent websocket frames for sending.
 

@@ -5,7 +5,7 @@ from .constants import *
 from .handshake_utils import mask_unmask
 
 
-__all__ = ['FrameParser', 'Message', 'Data']
+__all__ = ['FrameParser', 'Message', 'Frame']
 
 
 class Message:
@@ -93,7 +93,7 @@ class FrameParser:
         self.fin = frame.fin
 
 
-class Data:
+class Frame:
 
     def __init__(self, data, type, fin=True, status_code=None,
                  rsv_1=None, rsv_2=None, rsv_3=None):

@@ -41,12 +41,12 @@ It's best to wrap this workflow in a greater ``next_event()`` function. like so:
 
 This function will only ever return ``Message`` objects, which are nice ways of handling a received websocket frame.
 
-*You can get more information about the ``message`` object mentioned above, and ``Data`` object mentioned below,* `here <http://noio-ws.readthedocs.io/en/latest/api.html#data-object>`_ .
+*You can get more information about the ``message`` object mentioned above, and ``Frame`` object mentioned below,* `here <http://noio-ws.readthedocs.io/en/latest/api.html#frame-object>`_ .
 
-To send data, we use the ``Data`` object. It's also best to create a greater ``ws_send()`` function, much like ``ws_next_event()`` above. ::
+To send data, we use the ``Frame`` object. It's also best to create a greater ``ws_send()`` function, much like ``ws_next_event()`` above. ::
 
     def ws_send(message, type, fin=True, status_code=None):
-        sock.sendall(ws_conn.send(ws.Data(message, type, fin, status_code)))
+        sock.sendall(ws_conn.send(ws.Frame(message, type, fin, status_code)))
 
 To use this ``ws_send()`` function to send a 'hello world!' message, we'd simply call::
 
@@ -127,7 +127,7 @@ Combining these parts together, here is a barebones example client. Note that I 
 
         def ws_send(self, message, type, fin=True, status_code=None):
             self.sock.sendall(
-                self.ws_conn.send(ws.Data(message, type, fin, status_code)))
+                self.ws_conn.send(ws.Frame(message, type, fin, status_code)))
 
         def ws_next_event(self):
             while True:
@@ -197,7 +197,7 @@ And here is an example server ::
 
         def ws_send(self, message, type, fin=True, status_code=None):
             self.sock.sendall(
-                ws_conn.send(ws.Data(message, type, fin, status_code)))
+                ws_conn.send(ws.Frame(message, type, fin, status_code)))
 
         def next_event(self):
             while True:
@@ -276,7 +276,7 @@ That covers our two new opcodes and extension for incoming frames, but what abou
             message = compress(message)
             rsv_1 = 1
         sock.sendall(
-            ws_conn.send(ws.Data(message, type, fin, status_code, rsv_1=rsv_1)))
+            ws_conn.send(ws.Frame(message, type, fin, status_code, rsv_1=rsv_1)))
 
 And that's it. Everything else remains the same. You can add extensions and opcodes as arbitrarily as you like.
 
@@ -351,7 +351,7 @@ Here's the new client example in full: ::
 
             self.sock.sendall(
                 self.ws_conn.send(
-                ws.Data(message, type, fin, status_code, rsv_1=rsv_1)))
+                ws.Frame(message, type, fin, status_code, rsv_1=rsv_1)))
 
         def ws_next_event(self):
             while True:

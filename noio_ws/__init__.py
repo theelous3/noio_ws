@@ -1,3 +1,3 @@
 from .connection import Connection
-from .structs import Data, Message
+from .structs import Frame, Message
 from .constants import Roles, Information

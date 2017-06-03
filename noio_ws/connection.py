@@ -72,10 +72,10 @@ class Connection:
         else:  # self.state is CStates.CLOSED:
             raise NnwsProtocolError('Trying to recv data on closed connection')
 
-    def send(self, data):
-        assert isinstance(data, Data)
+    def send(self, frame):
+        assert isinstance(frame, Frame)
         if self.state is CStates.OPEN:
-            byteball, close = data(self.role, self.opcodes)
+            byteball, close = frame(self.role, self.opcodes)
             if close:
                 if self.close_init_server:
                     self.state = CStates.CLOSED
@@ -83,7 +83,7 @@ class Connection:
                     self.close_init_client = True
                     self.state = CStates.CLOSING
         elif self.state is CStates.CLOSING:
-            byteball, close = data(self.role, self.opcodes)
+            byteball, close = frame(self.role, self.opcodes)
             if not close:
                 raise NnwsProtocolError('Cannot send non-close frame in '
                                         'closing state')

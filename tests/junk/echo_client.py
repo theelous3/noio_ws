@@ -53,9 +53,9 @@ class WsClient:
             elif event.type == 'close':
                 return
 
-    async def ws_send(self, message, type, fin=True, status_code=None):
+    async def ws_send(self, message, type, fin=True):
         await self.sock.sendall(
-            self.ws_conn.send(ws.Data(message, type, fin, status_code)))
+            self.ws_conn.send(ws.Frame(message, type, fin)))
 
     async def ws_next_event(self):
         while True:
