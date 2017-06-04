@@ -15,7 +15,7 @@ MAGIC_STR = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 CONTROL_FRAMES = ['close', 'ping', 'pong']
 TYPE_FRAMES = ['text', 'binary']
-CONT_FRAME = ['continuation']
+CONT_FRAME = ['continue']
 BASE_ALL_FRAMES = CONTROL_FRAMES + TYPE_FRAMES + CONT_FRAME
 
 

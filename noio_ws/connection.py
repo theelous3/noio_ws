@@ -10,7 +10,8 @@ class Connection:
     def __init__(self,
                  role,
                  opcode_non_control_mod=None,
-                 opcode_control_mod=None):
+                 opcode_control_mod=None,
+                 max_buffer=9223372036854775807):
         if role == 'CLIENT':
             self.role = Roles.CLIENT
         elif role == 'SERVER':
@@ -22,7 +23,7 @@ class Connection:
         self.close_init_client = False
         self.close_init_server = False
 
-        self.opcodes = {0: 'continuation',
+        self.opcodes = {0: 'continue',
                         1: 'text',
                         2: 'binary',
                         8: 'close',
@@ -47,7 +48,7 @@ class Connection:
                                    opcode_control_mod.items()])
             self.opcodes.update(opcode_control_mod)
 
-        self.recvr = Recvr(self.role, self.opcodes)
+        self.recvr = Recvr(self.role, self.opcodes, max_buffer)
         self.event = None
 
     def recv(self, bytechunk):
@@ -55,7 +56,7 @@ class Connection:
         if self.state is CStates.OPEN:
             if isinstance(event, Message):
                 self.event = event
-                if self.event.type == 'close':
+                if self.event.f_type == 'close':
                     if self.close_init_client:
                         self.state = CStates.CLOSED
                     else:
@@ -115,11 +116,18 @@ class Connection:
 
 class Recvr:
 
-    def __init__(self, role, opcodes):
+    def __init__(self, role, opcodes, max_buffer):
         self.data_f = None
         self.f = None
 
+        self.latest_data_frame_type = None
+
         self.buffer = bytearray()
+        try:
+            assert max_buffer > 125
+            self.max_buffer = max_buffer
+        except AssertionError:
+            raise ValueError('max_buffer must be > 125')
 
         self.state = RecvrState.AWAIT_FRAME_START
         self.role = role
@@ -159,6 +167,10 @@ class Recvr:
             return Information.NEED_DATA
         self.f = FrameParser(self.buffer, self.opcodes)
         self.f.proc(self.role)
+        if self.latest_data_frame_type is None:
+            if self.f.opcode in TYPE_FRAMES:
+                self.latest_data_frame_type = self.f.opcode
+
         if self.f.l_bound:
             self.state = RecvrState.NEED_LEN
         elif self.f.masked:
@@ -173,6 +185,15 @@ class Recvr:
             return Information.NEED_DATA
         self.f.expected_len = int.from_bytes(
             self.f.buffer[2:self.f.l_bound], 'big')
+
+        if self.f.opcode in TYPE_FRAMES or self.f.opcode == 'continue':
+            if self.data_f is not None:
+                if (len(self.data_f.buffer) + self.f.expected_len >
+                        self.max_buffer):
+                    raise NnwsProtocolError('Message Too Big')
+        if self.f.expected_len > self.max_buffer:
+            raise NnwsProtocolError('Message Too Big')
+
         if self.f.masked:
             self.state = RecvrState.NEED_MASK
         else:
@@ -224,14 +245,19 @@ class Recvr:
                 self.f = None
                 raise NnwsProtocolError('Attempted to interleave '
                                         'non-control frames.')
-        elif self.f.opcode == 'continuation':
+        elif self.f.opcode == 'continue':
             if self.data_f:
                 self.data_f.incorporate(self.f)
                 if self.data_f.fin:
+                    if self.latest_data_frame_type == 'text':
+                        self.data_f.payload = str(self.data_f.payload, 'utf-8')
+                        self.latest_data_frame_type = None
                     returnable = Message(self.data_f.payload,
                                          self.data_f.opcode,
                                          self.data_f.resrvd)
                     self.data_f = None
+                else:
+                    returnable = Information.NEED_DATA
 
         elif self.f.opcode in CONTROL_FRAMES:
             if self.f.fin:

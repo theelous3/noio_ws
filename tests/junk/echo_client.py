@@ -20,41 +20,46 @@ class WsClient:
         self.http_conn = h11.Connection(our_role=h11.CLIENT)
         self.ws_shaker = Handshake('CLIENT')
 
-        self.ws_conn = ws.Connection('CLIENT')
+        self.ws_conn = ws.Connection('CLIENT', max_buffer=200)
 
     async def main(self, location):
         await self.sock.connect(location)
 
-        shake_data = self.ws_shaker.client_handshake('ws://echo.websocket.org')
+        shake_data = self.ws_shaker.client_handshake('ws://localhost')
         await self.http_send(shake_data, h11.EndOfMessage())
         http_response = await self.http_next_event()
         self.ws_shaker.verify_response(http_response)
 
         # Handshake done. Now to websocket stuff!
-        await self.ws_send(TEXT_TO_GO, 'text')
+        await curio.spawn(self.send_manager())
         incoming_messages_task = await curio.spawn(
             self.incoming_message_manager)
         await incoming_messages_task.join()
 
+    async def send_manager(self):
+        await self.ws_send(TEXT_TO_GO, 'text', fin=False)
+        await self.ws_send('', 'continue')
+        await curio.sleep(0.1)
+        await self.ws_send('', 'close')
+
     async def incoming_message_manager(self):
         while True:
             event = await self.ws_next_event()
-            if event.type == 'text':
+            if event.f_type == 'text':
                 print(event.message)
-                await self.ws_send('', 'close')
-            elif event.type == 'binary':
-                pass
+            elif event.f_type == 'binary':
+                print(event.message)
                 # do some binary-ish things
-            elif event.type == 'ping':
+            elif event.f_type == 'ping':
                 await self.ws_send(event.message, 'pong')
-            elif event.type == 'pong':
+            elif event.f_type == 'pong':
                 pass
-            elif event.type == 'close':
+            elif event.f_type == 'close':
                 return
 
-    async def ws_send(self, message, type, fin=True):
+    async def ws_send(self, message, f_type, fin=True):
         await self.sock.sendall(
-            self.ws_conn.send(ws.Frame(message, type, fin)))
+            self.ws_conn.send(ws.Frame(message, f_type, fin)))
 
     async def ws_next_event(self):
         while True:
@@ -79,4 +84,4 @@ class WsClient:
             return event
 
 client = WsClient()
-curio.run(client.main(('echo.websocket.org', 80)))
+curio.run(client.main(('localhost', 8765)))

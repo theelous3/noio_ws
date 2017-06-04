@@ -9,18 +9,19 @@ __all__ = ['FrameParser', 'Message', 'Frame']
 
 
 class Message:
-    def __init__(self, message, type, reserved):
+    def __init__(self, message, f_type, reserved):
         self.message = message
-        self.type = type
+        self.f_type = f_type
         self.reserved = reserved
         self.time = datetime.now()
 
     def __repr__(self):
-        repr_str = 'Message {}:(message="{}", type="{}", reserved={}, time={})'
+        repr_str = ('Message {}:(message="{}", f_type="{}",reserved={}, ' +
+                    'time={})')
         return repr_str.format(
             hex(id(self)),
             str(self.message[:9]) + ('[...]' if len(self.message) > 9 else ''),
-            self.type,
+            self.f_type,
             self.reserved,
             self.time)
 
@@ -54,11 +55,11 @@ class FrameParser:
             self.resrvd[1] = 1
         if b1 & 0b00010000:
             self.resrvd[2] = 1
-        # check opcode
 
+        # check opcode
         try:
             self.opcode = next(
-                (ophrase for opcode, ophrase  in self.opcodes.items()
+                (ophrase for opcode, ophrase in self.opcodes.items()
                  if b1 & 0b1111 == opcode))
         except StopIteration:
             raise NnwsProtocolError('Invalid opcode received.')
@@ -74,7 +75,6 @@ class FrameParser:
         self.expected_len = int(bin(b2)[2:].zfill(8)[1:], 2)
         if self.expected_len <= 125:
             pass
-
         elif self.expected_len == 126:
             self.l_bound = 4
         elif self.expected_len == 127:
@@ -95,17 +95,17 @@ class FrameParser:
 
 class Frame:
 
-    def __init__(self, data, type, fin=True, status_code=None,
+    def __init__(self, data, f_type, fin=True, status_code=None,
                  rsv_1=None, rsv_2=None, rsv_3=None):
         self.data = data
-        self.type = type
+        self.f_type = f_type
 
         if fin is False:
-            if self.type not in CONTROL_FRAMES:
+            if self.f_type not in CONTROL_FRAMES:
                 self.fin = fin
             else:
                 raise NnwsProtocolError('Trying to fragment'
-                                        'control frame:', self.type)
+                                        'control frame:', self.f_type)
         elif fin is True:
             self.fin = fin
         else:
@@ -140,7 +140,7 @@ class Frame:
 
         bytes_to_go = bytearray()
         close = False
-        if self.type == 'close':
+        if self.f_type == 'close':
             close = True
             if self.data:
                 assert (1000 <= self.status_code <= 1015 or
@@ -157,7 +157,7 @@ class Frame:
         if self.rsv_3:
             byte_0 = byte_0 | 1 << 4
 
-        opcode = next((k for k, v in opcodes.items() if v == self.type))
+        opcode = next((k for k, v in opcodes.items() if v == self.f_type))
         byte_0 = byte_0 | opcode
         bytes_to_go.append(byte_0)
 
@@ -181,7 +181,7 @@ class Frame:
         byte_1 = byte_1 | len_flag
         bytes_to_go.append(byte_1)
 
-        if len_flag in [126, 127] and self.type in CONTROL_FRAMES:
+        if len_flag in [126, 127] and self.f_type in CONTROL_FRAMES:
             raise NnwsProtocolError('Payload too big for'
                                     'control frame.'
                                     '{}/125:'.format(data_len))
