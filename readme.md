@@ -9,6 +9,7 @@ noio_ws is a sans-io websocket implementation. This means that it does not do an
 `pip install git+https://github.com/theelous3/noio_ws.git`
 
 ## Docs
+Docs are currently slightly out of sync as the lib undergoes some api changes! (Backwards compatible.)
 [Read 'em!](http://noio-ws.rtfd.io) There you'll find a guide to using noio_ws to write clients and servers as simple or complex as you'd like.
 
 ### Notes

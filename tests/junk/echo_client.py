@@ -9,7 +9,7 @@ from random import choice
 from string import ascii_lowercase
 
 
-TEXT_TO_GO = ''.join([choice(ascii_lowercase) for _ in range(200)])
+TEXT_TO_GO = ''.join([choice(ascii_lowercase) for _ in range(100)])
 
 
 class WsClient:
@@ -22,10 +22,12 @@ class WsClient:
 
         self.ws_conn = ws.Connection('CLIENT', max_buffer=200)
 
+        self.buffer = None
+
     async def main(self, location):
         await self.sock.connect(location)
 
-        shake_data = self.ws_shaker.client_handshake('ws://localhost')
+        shake_data = self.ws_shaker.client_handshake('ws://echo.websocket.org')
         await self.http_send(shake_data, h11.EndOfMessage())
         http_response = await self.http_next_event()
         self.ws_shaker.verify_response(http_response)
@@ -38,7 +40,7 @@ class WsClient:
 
     async def send_manager(self):
         await self.ws_send(TEXT_TO_GO, 'text', fin=False)
-        await self.ws_send('', 'continue')
+        await self.ws_send('fuuuuck', 'continue')
         await curio.sleep(0.1)
         await self.ws_send('', 'close')
 
@@ -46,9 +48,7 @@ class WsClient:
         while True:
             event = await self.ws_next_event()
             if event.f_type == 'text':
-                print(event.message)
             elif event.f_type == 'binary':
-                print(event.message)
                 # do some binary-ish things
             elif event.f_type == 'ping':
                 await self.ws_send(event.message, 'pong')
@@ -65,6 +65,9 @@ class WsClient:
         while True:
             event = self.ws_conn.next_event()
             if event is ws.Information.NEED_DATA:
+                mid_frame = self.ws_conn.pull_frame()
+                if mid_frame is not None:
+                    return mid_frame
                 self.ws_conn.recv(await self.sock.recv(2048))
                 continue
             return event
@@ -84,4 +87,4 @@ class WsClient:
             return event
 
 client = WsClient()
-curio.run(client.main(('localhost', 8765)))
+curio.run(client.main(('echo.websocket.org', 80)))

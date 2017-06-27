@@ -5,7 +5,7 @@ from .constants import *
 from .handshake_utils import mask_unmask
 
 
-__all__ = ['FrameParser', 'Message', 'Frame']
+__all__ = ['FrameParser', 'Message', 'PartialMessage', 'Frame']
 
 
 class Message:
@@ -14,6 +14,16 @@ class Message:
         self.f_type = f_type
         self.reserved = reserved
         self.time = datetime.now()
+
+    def combine(self, message_obj):
+        self.message += message_obj.message
+        self.reserved = message_obj.reserved
+
+    @property
+    def data(self):
+        content = self.message
+        self.message = ''
+        return content
 
     def __repr__(self):
         repr_str = ('Message {}:(message="{}", f_type="{}",reserved={}, ' +
@@ -26,6 +36,10 @@ class Message:
             self.time)
 
 
+class PartialMessage(Message):
+    pass
+
+
 class FrameParser:
     def __init__(self, bufferdata, opcodes):
         self.buffer = bufferdata
@@ -35,7 +49,10 @@ class FrameParser:
         self.opcode = None
         self.masked = False
         self.mask = None
+
         self.expected_len = 0
+        self.remaining_len = 0
+
         self.l_bound = 0
         self.pl_strt = 2
 

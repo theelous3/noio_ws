@@ -113,6 +113,19 @@ class Connection:
             raise NnwsProtocolError('Trying to recv data on closed connection')
         return returnable
 
+    def pull_frame(self):
+        try:
+            if self.recvr.partial_message_signal:
+                frame = PartialMessage(self.recvr.data_f.payload,
+                                       self.recvr.data_f.opcode,
+                                       self.recvr.data_f.resrvd)
+                self.recvr.data_f.payload = bytearray()
+                self.recvr.data_f.buffer[self.recvr.data_f.pl_strt:] = b''
+                self.recvr.partial_message_signal = False
+                return frame
+        except AttributeError:
+            pass
+
 
 class Recvr:
 
@@ -132,6 +145,8 @@ class Recvr:
         self.state = RecvrState.AWAIT_FRAME_START
         self.role = role
         self.opcodes = opcodes
+
+        self.partial_message_signal = False
 
     def __call__(self, bytechunk):
         if self.state is RecvrState.AWAIT_FRAME_START:
@@ -162,7 +177,6 @@ class Recvr:
             return self.msg_recvd()
 
     def await_start(self):
-
         if len(self.buffer) < 2:
             return Information.NEED_DATA
         self.f = FrameParser(self.buffer, self.opcodes)
@@ -234,30 +248,27 @@ class Recvr:
         if self.f.opcode in TYPE_FRAMES:
             if not self.data_f:
                 if self.f.fin:
-                    if self.f.opcode == 'text':
-                        self.f.payload = str(self.f.payload, 'utf-8')
                     returnable = Message(
                         self.f.payload, self.f.opcode, self.f.resrvd)
                 else:
                     self.data_f = self.f
+                    self.partial_message_signal = True
                     returnable = Information.NEED_DATA
             else:
                 self.f = None
                 raise NnwsProtocolError('Attempted to interleave '
                                         'non-control frames.')
         elif self.f.opcode == 'continue':
-            if self.data_f:
-                self.data_f.incorporate(self.f)
-                if self.data_f.fin:
-                    if self.latest_data_frame_type == 'text':
-                        self.data_f.payload = str(self.data_f.payload, 'utf-8')
-                        self.latest_data_frame_type = None
-                    returnable = Message(self.data_f.payload,
-                                         self.data_f.opcode,
-                                         self.data_f.resrvd)
-                    self.data_f = None
-                else:
-                    returnable = Information.NEED_DATA
+            self.data_f.incorporate(self.f)
+            self.partial_message_signal = True
+            if self.data_f.fin:
+                self.latest_data_frame_type = None
+                returnable = Message(self.data_f.payload,
+                                     self.data_f.opcode,
+                                     self.data_f.resrvd)
+                self.data_f = None
+            else:
+                returnable = Information.NEED_DATA
 
         elif self.f.opcode in CONTROL_FRAMES:
             if self.f.fin:
