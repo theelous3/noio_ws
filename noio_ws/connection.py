@@ -11,7 +11,8 @@ class Connection:
                  role,
                  opcode_non_control_mod=None,
                  opcode_control_mod=None,
-                 max_buffer=9223372036854775807):
+                 max_buffer=9223372036854775807,
+                 full_message=False):
         if role == 'CLIENT':
             self.role = Roles.CLIENT
         elif role == 'SERVER':
@@ -48,7 +49,7 @@ class Connection:
                                    opcode_control_mod.items()])
             self.opcodes.update(opcode_control_mod)
 
-        self.recvr = Recvr(self.role, self.opcodes, max_buffer)
+        self.recvr = Recvr(self.role, self.opcodes, max_buffer, full_message)
         self.event = None
 
     def recv(self, bytechunk):
@@ -74,7 +75,7 @@ class Connection:
             raise NnwsProtocolError('Trying to recv data on closed connection')
 
     def send(self, frame):
-        assert isinstance(frame, Frame)
+        assert isinstance(frame, SendFrame)
         if self.state is CStates.OPEN:
             byteball, close = frame(self.role, self.opcodes)
             if close:
@@ -116,9 +117,10 @@ class Connection:
     def pull_frame(self):
         try:
             if self.recvr.partial_message_signal:
-                frame = PartialMessage(self.recvr.data_f.payload,
-                                       self.recvr.data_f.opcode,
-                                       self.recvr.data_f.resrvd)
+                frame = ReceivedFrame(False,
+                                      self.recvr.data_f.payload,
+                                      self.recvr.data_f.opcode,
+                                      self.recvr.data_f.resrvd)
                 self.recvr.data_f.payload = bytearray()
                 self.recvr.data_f.buffer[self.recvr.data_f.pl_strt:] = b''
                 self.recvr.partial_message_signal = False
@@ -129,7 +131,7 @@ class Connection:
 
 class Recvr:
 
-    def __init__(self, role, opcodes, max_buffer):
+    def __init__(self, role, opcodes, max_buffer, full_message):
         self.data_f = None
         self.f = None
 
@@ -146,6 +148,7 @@ class Recvr:
         self.role = role
         self.opcodes = opcodes
 
+        self.full_message = full_message
         self.partial_message_signal = False
 
     def __call__(self, bytechunk):
@@ -246,39 +249,82 @@ class Recvr:
     def msg_recvd(self):
         self.buffer = self.f.buffer[self.f.raw_len:]
         if self.f.opcode in TYPE_FRAMES:
-            if not self.data_f:
-                if self.f.fin:
-                    returnable = Message(
-                        self.f.payload, self.f.opcode, self.f.resrvd)
-                else:
-                    self.data_f = self.f
-                    self.partial_message_signal = True
-                    returnable = Information.NEED_DATA
-            else:
-                self.f = None
-                raise NnwsProtocolError('Attempted to interleave '
-                                        'non-control frames.')
+            returnable = self.type_frame_body()
+
         elif self.f.opcode == 'continue':
-            self.data_f.incorporate(self.f)
-            self.partial_message_signal = True
-            if self.data_f.fin:
-                self.latest_data_frame_type = None
-                returnable = Message(self.data_f.payload,
-                                     self.data_f.opcode,
-                                     self.data_f.resrvd)
-                self.data_f = None
-            else:
-                returnable = Information.NEED_DATA
+            returnable = self.continue_body()
 
         elif self.f.opcode in CONTROL_FRAMES:
-            if self.f.fin:
-                returnable = Message(
-                    bytes(self.f.payload), self.f.opcode, self.f.resrvd)
-            else:
-                self.f = None
-                raise NnwsProtocolError('Fragmented control frame.')
+            returnable = self.control_body()
 
         self.state = RecvrState.AWAIT_FRAME_START
         self.f = None
+        if not self.full_message:
+            if self.data_f:
+                self.mod_buffer()
 
         return returnable
+
+    def type_frame_body(self):
+        if not self.data_f:
+            if self.f.fin:
+                if self.full_message:
+                    returnable = Message(
+                        self.f.payload, self.f.opcode, self.f.resrvd)
+                else:
+                    returnable = ReceivedFrame(True,
+                                               self.f.payload,
+                                               self.f.opcode,
+                                               self.f.resrvd)
+            else:
+                self.data_f = self.f
+                if not self.full_message:
+                    returnable = ReceivedFrame(False,
+                                               self.data_f.payload,
+                                               self.data_f.opcode,
+                                               self.data_f.resrvd)
+                else:
+                    returnable = Information.NEED_DATA
+        else:
+            self.f = None
+            raise NnwsProtocolError('Attempted to interleave '
+                                    'non-control frames.')
+        return returnable
+
+    def continue_body(self):
+        self.data_f.incorporate(self.f)
+        if not self.full_message:
+            self.partial_message_signal = True
+        if self.data_f.fin:
+            self.latest_data_frame_type = None
+            if self.full_message:
+                returnable = Message(self.data_f.payload,
+                                     self.data_f.opcode,
+                                     self.data_f.resrvd)
+            else:
+                returnable = ReceivedFrame(True,
+                                           self.data_f.payload,
+                                           self.data_f.opcode,
+                                           self.data_f.resrvd)
+            self.data_f = None
+        else:
+            if self.full_message:
+                returnable = Information.NEED_DATA
+            else:
+                returnable = ReceivedFrame(False,
+                                           self.data_f.payload,
+                                           self.data_f.opcode,
+                                           self.data_f.resrvd)
+        return returnable
+
+    def control_body(self):
+        if self.f.fin:
+                return ControlMessage(
+                    self.f.payload, self.f.opcode, self.f.resrvd)
+        else:
+            self.f = None
+            raise NnwsProtocolError('Fragmented control frame.')
+
+    def mod_buffer(self):
+        self.data_f.buffer = bytearray()
+        self.data_f.payload = bytearray()

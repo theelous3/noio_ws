@@ -1,3 +1,5 @@
+'''Client to test mid-message frame getting.'''
+
 import h11
 import curio
 from curio import socket
@@ -20,9 +22,9 @@ class WsClient:
         self.http_conn = h11.Connection(our_role=h11.CLIENT)
         self.ws_shaker = Handshake('CLIENT')
 
-        self.ws_conn = ws.Connection('CLIENT', max_buffer=200)
+        self.ws_conn = ws.Connection('CLIENT', max_buffer=126)
 
-        self.buffer = None
+        self.buffer = ws.TypeFrameBuffer()
 
     async def main(self, location):
         await self.sock.connect(location)
@@ -40,36 +42,40 @@ class WsClient:
 
     async def send_manager(self):
         await self.ws_send(TEXT_TO_GO, 'text', fin=False)
-        await self.ws_send('fuuuuck', 'continue')
+        await self.ws_send(' End of text to go.', 'continue')
+        await curio.sleep(1)
+        await self.ws_send(b'tendicks hendrix', 'binary', fin=False)
+        await self.ws_send(b' plays the gwitar', 'continue')
         await curio.sleep(0.1)
         await self.ws_send('', 'close')
 
     async def incoming_message_manager(self):
         while True:
             event = await self.ws_next_event()
-            if event.f_type == 'text':
-                print('SHIT', event.message)
-            elif event.f_type == 'binary':
-                print(event.data)
-                # do some binary-ish things
-            elif event.f_type == 'ping':
-                await self.ws_send(event.message, 'pong')
-            elif event.f_type == 'pong':
-                pass
-            elif event.f_type == 'close':
-                return
+
+            if isinstance(event, ws.ReceivedFrame):
+                self.buffer.add(event)
+                if self.buffer.f_type == 'text':
+                    print('TEXT:', self.buffer.data.decode('utf-8'),self.buffer.fin)
+                elif self.buffer.f_type == 'binary':
+                    print('BINARY:', self.buffer.data, self.buffer.fin)
+
+            elif isinstance(event, ws.ControlMessage):
+                if event.f_type == 'ping':
+                    await self.ws_send(event.message, 'pong')
+                elif event.f_type == 'pong':
+                    pass
+                elif event.f_type == 'close':
+                    return
 
     async def ws_send(self, message, f_type, fin=True):
         await self.sock.sendall(
-            self.ws_conn.send(ws.Frame(message, f_type, fin)))
+            self.ws_conn.send(ws.SendFrame(message, f_type, fin)))
 
     async def ws_next_event(self):
         while True:
             event = self.ws_conn.next_event()
             if event is ws.Information.NEED_DATA:
-                mid_frame = self.ws_conn.pull_frame()
-                if mid_frame is not None:
-                    return mid_frame
                 self.ws_conn.recv(await self.sock.recv(2048))
                 continue
             return event

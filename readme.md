@@ -9,10 +9,10 @@ noio_ws is a sans-io websocket implementation. This means that it does not do an
 `pip install git+https://github.com/theelous3/noio_ws.git`
 
 ## Docs
-Docs are currently slightly out of sync as the lib undergoes some api changes! (Backwards compatible.)
+Docs are currently slightly out of sync as the lib undergoes some api changes!
 [Read 'em!](http://noio-ws.rtfd.io) There you'll find a guide to using noio_ws to write clients and servers as simple or complex as you'd like.
 
 ### Notes
-This lib is a work in progress, however the pure websocket stuff is quite well polished and ready to go. The opening handshake, by its very nature, is awful to work with. The current task is working out a nice user-usable api for dealing with extension and protocol negotiation.
+This lib is a work in progress, and the api is in flux whilst nice human usable solutions are poked and prodded in to formation.
 
 ### Shoutout to ##lp, and the fine peeps of 8banana

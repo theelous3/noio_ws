@@ -5,7 +5,12 @@ from .constants import *
 from .handshake_utils import mask_unmask
 
 
-__all__ = ['FrameParser', 'Message', 'PartialMessage', 'Frame']
+__all__ = ['FrameParser',
+           'Message',
+           'ReceivedFrame',
+           'ControlMessage',
+           'TypeFrameBuffer',
+           'SendFrame']
 
 
 class Message:
@@ -15,18 +20,14 @@ class Message:
         self.reserved = reserved
         self.time = datetime.now()
 
-    def combine(self, message_obj):
-        self.message += message_obj.message
-        self.reserved = message_obj.reserved
-
     @property
     def data(self):
         content = self.message
-        self.message = ''
+        self.message = bytearray()
         return content
 
     def __repr__(self):
-        repr_str = ('Message {}:(message="{}", f_type="{}",reserved={}, ' +
+        repr_str = ('{}:(message="{}", f_type="{}",reserved={}, ' +
                     'time={})')
         return repr_str.format(
             hex(id(self)),
@@ -36,8 +37,61 @@ class Message:
             self.time)
 
 
-class PartialMessage(Message):
+class ReceivedFrame(Message):
+    def __init__(self, fin=False, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fin = fin
+
+    def combine(self, message_obj):
+        self.fin = message_obj.fin
+        self.message.extend(message_obj.message)
+        self.reserved = message_obj.reserved
+        self.time = message_obj.time
+
+
+class ControlMessage(Message):
     pass
+
+
+class TypeFrameBuffer:
+    def __init__(self):
+        self.f = None
+
+    def add(self, f):
+        if self.f is None:
+            self.f = f
+        else:
+            if self.f.fin:
+                self.f = f
+            else:
+                self.f.combine(f)
+
+    def combine(self, message_obj):
+        self.f.combine(message_obj)
+
+    @property
+    def data(self):
+        return self.f.data
+
+    @property
+    def message(self):
+        return self.f.message
+
+    @property
+    def f_type(self):
+        return self.f.f_type
+
+    @property
+    def reserved(self):
+        return self.f.reserved
+
+    @property
+    def time(self):
+        return self.f.time
+
+    @property
+    def fin(self):
+        return self.f.fin
 
 
 class FrameParser:
@@ -110,7 +164,7 @@ class FrameParser:
         self.fin = frame.fin
 
 
-class Frame:
+class SendFrame:
 
     def __init__(self, data, f_type, fin=True, status_code=None,
                  rsv_1=None, rsv_2=None, rsv_3=None):
