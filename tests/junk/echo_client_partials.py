@@ -62,15 +62,15 @@ class WsClient:
 
             elif isinstance(event, ws.ControlMessage):
                 if event.f_type == 'ping':
-                    await self.ws_send(event.message, 'pong')
+                    await self.ws_send(event.payload, 'pong')
                 elif event.f_type == 'pong':
                     pass
                 elif event.f_type == 'close':
                     return
 
-    async def ws_send(self, message, f_type, fin=True):
+    async def ws_send(self, payload, f_type, fin=True):
         await self.sock.sendall(
-            self.ws_conn.send(ws.SendFrame(message, f_type, fin)))
+            self.ws_conn.send(ws.SendFrame(payload, f_type, fin)))
 
     async def ws_next_event(self):
         while True:

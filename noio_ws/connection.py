@@ -7,6 +7,8 @@ __all__ = ['Connection']
 
 
 class Connection:
+    '''The main connection object through which all incoming and
+    outgoing data is passed.'''
     def __init__(self,
                  role,
                  opcode_non_control_mod=None,
@@ -53,9 +55,10 @@ class Connection:
         self.event = None
 
     def recv(self, bytechunk):
+        '''Bytes from the network are passed in for processing in to events.'''
         event = self.recvr(bytechunk)
         if self.state is CStates.OPEN:
-            if isinstance(event, Message):
+            if isinstance(event, BaseFrame):
                 self.event = event
                 if self.event.f_type == 'close':
                     if self.close_init_client:
@@ -66,7 +69,7 @@ class Connection:
 
         elif self.state is CStates.CLOSING:
             if self.close_init_client:
-                if isinstance(event, Message):
+                if isinstance(event, BaseFrame):
                     self.event = event
             elif self.close_init_server:
                 self.event = Information.SEND_CLOSE
@@ -75,6 +78,8 @@ class Connection:
             raise NnwsProtocolError('Trying to recv data on closed connection')
 
     def send(self, frame):
+        '''SendFrame objects are passed in, converted in to bytes and then
+        returned as bytes ready for transport over network.'''
         assert isinstance(frame, SendFrame)
         if self.state is CStates.OPEN:
             byteball, close = frame(self.role, self.opcodes)
@@ -95,6 +100,10 @@ class Connection:
         return byteball
 
     def next_event(self):
+        '''Checks to see if there is a ReceivedFrame, Message or ControlFrame
+        ready and returns them. If there is not, returns Information.NEED_DATA
+        indicating more data from the network is required to construct an
+        event.'''
         if self.state is CStates.OPEN:
             if self.event is not None:
                 returnable = self.event
@@ -114,23 +123,10 @@ class Connection:
             raise NnwsProtocolError('Trying to recv data on closed connection')
         return returnable
 
-    def pull_frame(self):
-        try:
-            if self.recvr.partial_message_signal:
-                frame = ReceivedFrame(False,
-                                      self.recvr.data_f.payload,
-                                      self.recvr.data_f.opcode,
-                                      self.recvr.data_f.resrvd)
-                self.recvr.data_f.payload = bytearray()
-                self.recvr.data_f.buffer[self.recvr.data_f.pl_strt:] = b''
-                self.recvr.partial_message_signal = False
-                return frame
-        except AttributeError:
-            pass
-
 
 class Recvr:
-
+    '''A class the implements the parsing of network data in to the relevant
+    frame type.'''
     def __init__(self, role, opcodes, max_buffer, full_message):
         self.data_f = None
         self.f = None
@@ -152,6 +148,34 @@ class Recvr:
         self.partial_message_signal = False
 
     def __call__(self, bytechunk):
+        '''Bytes are passed in and processed in to frames here, dependent on
+        the current state of self.
+
+        AWAIT_FRAME_START indicates that enough data to begin constructing a
+            frame has yet to be passed.
+
+        NEED_LEN indicates that the current frame being parsed has a payload
+            longer than the minimum frame size and that further processing is
+            required to determine the length of the frame.
+
+        NEED_MASK indicates that the frame is masked, and the mask must be
+            processed.
+
+        NEED_BODY indicates that the frame header parsing is complete and that
+            we're ready to collect the frame's payload.
+
+        MSG_RECVD indicates that the entire message has been parsed, and we're
+        on to the task of identifying the frame's type, finally returning the
+        appropriate frame type.
+
+        Returns:
+            Information.NEED_DATA - when not enough bytes for a full frame have
+                been passed from the network.
+            ReceivedFrame - when frames are requested as events, and any non-
+                control frame has been fully processed.
+            Message - when full messages are requested as events and any non-
+                control frame has been fully processed.
+            ControlFrame - when any control frame has been processed.'''
         if self.state is RecvrState.AWAIT_FRAME_START:
             if bytechunk:
                 self.buffer.extend(bytechunk)

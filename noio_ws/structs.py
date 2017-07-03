@@ -6,6 +6,7 @@ from .handshake_utils import mask_unmask
 
 
 __all__ = ['FrameParser',
+           'BaseFrame',
            'Message',
            'ReceivedFrame',
            'ControlMessage',
@@ -13,47 +14,61 @@ __all__ = ['FrameParser',
            'SendFrame']
 
 
-class Message:
-    def __init__(self, message, f_type, reserved):
-        self.message = message
+class BaseFrame:
+    def __init__(self, payload, f_type, reserved):
+        '''The base type for all received frames.'''
+        self.payload = payload
         self.f_type = f_type
         self.reserved = reserved
         self.time = datetime.now()
 
     @property
     def data(self):
-        content = self.message
-        self.message = bytearray()
+        '''More memory efficient access to the payload attribute.
+        Works a bit like a one time iterator.'''
+        content = self.payload
+        self.payload = bytearray()
         return content
 
     def __repr__(self):
-        repr_str = ('{}:(message="{}", f_type="{}",reserved={}, ' +
+        repr_str = ('{}:(payload="{}", f_type="{}",reserved={}, ' +
                     'time={})')
         return repr_str.format(
             hex(id(self)),
-            str(self.message[:9]) + ('[...]' if len(self.message) > 9 else ''),
+            str(self.payload[:9]) + ('[...]' if len(self.payload) > 9 else ''),
             self.f_type,
             self.reserved,
             self.time)
 
 
-class ReceivedFrame(Message):
+class Message(BaseFrame):
+    '''The type of frame used for full message interactions.'''
+    pass
+
+
+class ReceivedFrame(BaseFrame):
+    '''The type of frame used for interactions where partial frames are
+    events.'''
     def __init__(self, fin=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fin = fin
 
-    def combine(self, message_obj):
-        self.fin = message_obj.fin
-        self.message.extend(message_obj.message)
-        self.reserved = message_obj.reserved
-        self.time = message_obj.time
+    def combine(self, frame_obj):
+        self.fin = frame_obj.fin
+        self.payload.extend(frame_obj.payload)
+        self.reserved = frame_obj.reserved
+        self.time = frame_obj.time
 
 
-class ControlMessage(Message):
+class ControlMessage(BaseFrame):
+    '''The frame type used for control frames.'''
     pass
 
 
 class TypeFrameBuffer:
+    '''A special buffer used to collect ReceivedFrames, such that the
+    frames headers are kept up to date along with fragmented frames.
+    Basically a wrapper.'''
     def __init__(self):
         self.f = None
 
@@ -74,8 +89,8 @@ class TypeFrameBuffer:
         return self.f.data
 
     @property
-    def message(self):
-        return self.f.message
+    def payload(self):
+        return self.f.payload
 
     @property
     def f_type(self):
@@ -95,6 +110,8 @@ class TypeFrameBuffer:
 
 
 class FrameParser:
+    '''The parser class that deals with parsing an incoming frame's
+    headers.'''
     def __init__(self, bufferdata, opcodes):
         self.buffer = bufferdata
         self.opcodes = opcodes
@@ -115,6 +132,8 @@ class FrameParser:
         self.frame_size = 0
 
     def proc(self, ROLE):
+        '''When sufficient bytes have been received, the parsing of a frame
+        can begin. This proc method is...procced, and so begins the parsing.'''
         b1, b2 = self.buffer[:2]
         # check fin
         if b1 & 0b10000000:
@@ -155,6 +174,8 @@ class FrameParser:
                                     self.expected_len)
 
     def incorporate(self, frame):
+        '''Incorporates one frame in to another, used to combine multiple
+        frames in to full Message objects.'''
         self.buffer.extend(frame.buffer)
         for index, rsrv in enumerate(self.resrvd):
             if not rsrv and frame.resrvd[index]:
@@ -165,7 +186,7 @@ class FrameParser:
 
 
 class SendFrame:
-
+    '''The class used to construct frames for sending over network.'''
     def __init__(self, data, f_type, fin=True, status_code=None,
                  rsv_1=None, rsv_2=None, rsv_3=None):
         self.data = data
@@ -207,6 +228,8 @@ class SendFrame:
             self.rsv_3 = rsv_3
 
     def __call__(self, role, opcodes):
+        '''When the instance is called, a bunch'a operations take place that
+        turn the frame in to a network suitable bytes object.'''
         self.data = bytesify(self.data)
 
         bytes_to_go = bytearray()
@@ -270,6 +293,7 @@ class SendFrame:
 
 
 def bytesify(data):
+    '''Turns things in to bytes.'''
     if isinstance(data, str):
         data = bytearray(data, 'utf-8')
     elif isinstance(data, bytes):
